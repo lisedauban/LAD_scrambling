@@ -1,9 +1,3 @@
----
-title: "README"
-output: html_document
-date: "2023-11-15"
----
-
 # General information
 This folder contains information about the pipelines used in the manuscript "Genome - nuclear lamina interactions are multivalent and cooperative" by Dauban et al.. 
 Are detailed pipelines to:
