@@ -1,0 +1,1344 @@
+###############################################################################
+## snakemake config - damid pipeline ##########################################
+###############################################################################
+## Tom van Schaik
+## 171120
+## version 1.3
+
+# Introduction snakemake:
+# Snakemake is a bioinformatics pipeline tool written in python. It follows the 
+# 'make'-logic: you determine rules with which files can be generated, and 
+# which input files these require. Snakemake will try to execute the first rule
+# given, and execute other rules based on the input the final rule requires. 
+# In this way, you have a pipeline. 
+# Some cool features of snakemake:
+# - You give input and output file names, and snakemake will do the rest.
+# - If a rule gives an error, the output file is automatically removed, to 
+#   prevent "partial" data files.
+# - Given a number of cores to snakemake, it will automatically parallelize 
+#   things when possible. 
+# - You can create a fancy workflow overview picture.
+
+# This is the config file for a damid snakemake pipeline, where you list 
+# parameters which will be used in the pipeline.
+
+# Versions:
+# 1.0 - Initial version
+# 1.1 - Updated pipeline
+# 1.2 - Added replicates + changed basename scheme
+# 1.3 - Changed mapping to bwa mem for 4DN compatibility
+
+###############################################################################
+### Parameters and file locations #############################################
+###############################################################################
+
+# FastQC
+conda_fastqc: ../../bin/fastqc/conda_fastqc.yaml
+
+# Parsing
+read_parser: bin/read_parser/read_parser.py
+read_structure: bin/read_parser/read_structure_directligation.txt
+conda_parser: ../../bin/read_parser/conda_parser.yaml
+
+# Mapping
+mapper: bin/mapping/mapping_bwa.sh
+genome_index: /DATA/scratch/usr/t.v.schaik/data/genomes/mm10/ENCODE/mm10_no_alt_analysis_set_ENCODE
+conda_mapping: /DATA/usr/v.franceschini/MISC/vf230516_ste_conda_env.yaml
+
+# Counting
+gatc_counting: bin/gatc_counting/gatc_counting_mm10.R
+gatc_gff: /DATA/scratch/usr/t.v.schaik/data/genomes/mm10/ENCODE/mm10_no_alt_analysis_set_ENCODE_gatc_fragments.gff
+#bins: "5,10,20,25,50,100"
+bins: "5,10,25"
+
+# Normalizing
+normalize_damid: bin/normalization/normalize_damid.R
+normalize_method: dam-log2
+pseudo: 1
+combine_replicates: bin/normalization/combine_replicates.R
+
+# Tracks
+bed2bigwig: bin/data_tracks/bed2BigWig.R
+chrom_sizes: /DATA/scratch/usr/t.v.schaik/data/genomes/mm10/mm10.chrom.sizes
+
+# HMM
+hmm_calling: "bin/HMM_calling/HMM.R"
+
+# File report - the locations should be relative from the snakemake file
+report_relative_location: "./"    # required for previous versions of snakemake
+file_report: "../../bin/reports/experiment_statistics_mm10.Rmd"
+replicate_report: "../../bin/reports/replicate_statistics.Rmd"
+# Centromeres - only relevant for human and not for mouse
+#centromeres_bed: "bin/reports/ts171110_hg38_centromeres.bed.gz"
+
+# Statistics
+gather_statistics: "bin/statistics/gather_statistics_strainspecific.R"
+merge_statistics: "bin/statistics/merge_statistics.R"
+
+# Multiqc
+conda_multiqc: ../../bin/multiqc/conda_multiqc.yaml
+
+
+###############################################################################
+### WASP strain specific config ###############################################
+###############################################################################
+
+# Note: I have integrated the WASP snakefile (from some time ago) in the DamID
+# pipeline. Many WASP-specific things are not not required anymore, and 
+# commented. In this document, I have added the WASP configuration. The actual
+# WASP rules are in a separate document.
+
+
+# py2 is a hack so that python2 scripts can be called
+# by snakemake (which is written in python3). The value should
+# be a command to do whatever is needed to setup a python2 environment and
+# call the python2 interpreter. Depending on your system configuration,
+# this might involve setting the PATH environment variable or
+# just calling python2
+# "py2" : "PATH=$HOME/anaconda2/bin:$PATH; python ",
+#py2: "PATH=/home/t.v.schaik/mydata/miniconda3/envs/WASP_python2/bin:$PATH; python "
+# "py2" : "/home/t.v.schaik/mydata/miniconda3/envs/WASP_python2/bin/python",
+
+# WASP directory containing scripts
+wasp_dir: "/home/t.v.schaik/mydata/src/WASP/"
+
+# # directory to write all output data files to
+# "output_dir" :  "WASP_ts190215_newparsing",
+
+# location of chromInfo file containing chromosome names and lengths
+# (can be downloaded from UCSC genome browser)
+chrom_info: "/home/t.v.schaik/mydata/data/genomes/mm10/mm10.chrom.sizes"
+
+# directory to read VCF files from (used to write SNP input files)
+# "vcf_dir" : "/home/t.v.schaik/mydata/data/genomes/mouse_assemblies/WASP",
+# vcf_dir: "/home/t.v.schaik/mydata/data/genomes/mouse_assemblies/WASP"
+
+# OLD way: directory to write SNP plain text input files to
+snp_dir: "/home/t.v.schaik/mydata/data/genomes/mouse_assemblies/WASP/SNP_tables"
+
+## directory to write SNP HDF5 input files to
+#snp_h5_dir: "WASP_output/SNPs"
+
+# path to samtools
+samtools: "samtools"
+
+## path to bowtie2 aligner
+#bowtie2: "bowtie2"
+
+## prefix for bowtie2 reference genome index
+#bowtie2_index : "/home/t.v.schaik/mydata/data/genomes/mouse_assemblies/bowtie2_index/GRCm38_68"
+
+# WASP conda
+conda_WASP: "../../bin/WASP/conda_WASP.yaml"
+
+# split genomes - custom function to split genomes based on SNP presence
+split_genomes: "bin/WASP/split_bam_genomes.py"
+
+
+###############################################################################
+### Input and output ##########################################################
+###############################################################################
+
+# Note #1: use spaces instead of tabs for some reason!
+
+# Output directories
+output_dir: "results_mm10_nextseq_strainspecific"
+
+out_fastqc: fastqc
+out_fastqc_parsed: fastqc_parsed
+out_parse: parsed
+out_map: mapped
+out_count: counts
+out_norm: normalized
+out_tracks_norm: tracks/normalized
+out_tracks_counts: tracks/counts
+out_hmm: "HMM"
+out_report_experiment: "reports/experiment"
+out_report_replicate: "reports/replicate"
+out_statistics: statistics
+out_multiqc: multiqc
+
+out_WASP: "WASP_tmp"
+out_map_strainspecific: "mapped_strainspecific"
+
+
+# Basename target to basename dam-only control list
+basenames:
+
+  #####################################
+  ### F1 hybrid mESCs ############################
+  #####################################
+
+# pA-DamID, LaminB1, deletion series
+  WT_1_Dam:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_1_WT_1_Dam_ACCTTCGGAC-GACCGTAGAT_S1_R1_001.fastq.gz
+  WT_1_LB1:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_2_WT_1_LB1_TTCTACCGGC-TACTCGTAAG_S2_R1_001.fastq.gz
+  T201_1_Dam:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_3_T201_1_Dam_TATCATGTCG-TAATCTGCAC_S3_R1_001.fastq.gz
+  T201_1_LB1:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_4_T201_1_LB1_GTGAGAGTAT-ATCTGTGAGG_S4_R1_001.fastq.gz
+  T201_r20_1_Dam:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_5_T201_r20_1_Dam_CGTCTAGTAA-TTAATCCAGC_S5_R1_001.fastq.gz
+  T201_r20_1_LB1:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_6_T201_r20_1_LB1_CTGGAGAATA-TCCATACAAC_S6_R1_001.fastq.gz
+  T48h20_1_Dam:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_7_T48h20_1_Dam_TCTTAGGTGG-GATCACTGGT_S7_R1_001.fastq.gz
+  T48h20_1_LB1:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_8_T48h20_1_LB1_TGACAAGAGG-AATCTGTTGG_S8_R1_001.fastq.gz
+  T201h24_1_Dam:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_9_T201h24_1_Dam_TCGACGTTGG-GATAAGTGTG_S9_R1_001.fastq.gz
+  T201h24_1_LB1:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_10_T201h24_1_LB1_TGTTCGCTCT-ACTTGCGTGT_S10_R1_001.fastq.gz
+  T201h44_1_Dam:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_11_T201h44_1_Dam_AAGAGTACGA-GCAAGGACGT_S11_R1_001.fastq.gz
+  T201h44_1_LB1:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_12_T201h44_1_LB1_AGGTATTCGG-AGATGTGCGC_S12_R1_001.fastq.gz
+  T201h65_1_Dam:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_13_T201h65_1_Dam_CACGAGAAGT-GTCTGCGTAG_S13_R1_001.fastq.gz
+  T201h65_1_LB1:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_14_T201h65_1_LB1_ACGGCCTACA-TCTCACTCTA_S14_R1_001.fastq.gz
+  T201h179_1_Dam:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_15_T201h179_1_Dam_GACAATTAGC-CCGGTCATGA_S15_R1_001.fastq.gz
+  T201h179_1_LB1:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_16_T201h179_1_LB1_CACGTAAGAG-TCAATCCGCG_S16_R1_001.fastq.gz
+  T48h20r8_1_Dam:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_17_T48h20r8_1_Dam_AATCGAACTC-ACGAACCTTA_S17_R1_001.fastq.gz
+  T48h20r8_1_LB1:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_18_T48h20r8_1_LB1_CATTGAGCTA-ACTTCACATC_S18_R1_001.fastq.gz
+  T48h20r16_1_Dam:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_19_T48h20r16_1_Dam_AGGCTGGAGA-CAACTGTCAT_S19_R1_001.fastq.gz
+  T48h20r16_1_LB1:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_20_T48h20r16_1_LB1_CTTCGGAATC-CGTCGGTAAG_S20_R1_001.fastq.gz
+  T201h24r2_1_Dam:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_21_T201h24r2_1_Dam_TAAGCCACGC-TTACGAACGA_S21_R1_001.fastq.gz
+  T201h24r2_1_LB1:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_22_T201h24r2_1_LB1_AACCACACTA-CCTCTGCTGA_S22_R1_001.fastq.gz
+  T201h44r3_1_Dam:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_23_T201h44r3_1_Dam_TCAATCAGAG-GACTCTGGTT_S23_R1_001.fastq.gz
+  T201h44r3_1_LB1:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_24_T201h44r3_1_LB1_GTACAGCGGA-CAATCTGTGT_S24_R1_001.fastq.gz
+  T201h44r14_1_Dam:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_25_T201h44r14_1_Dam_AACATAAGGC-GTTAGCTTAG_S25_R1_001.fastq.gz
+  T201h44r14_1_LB1:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_26_T201h44r14_1_LB1_ACTTCAACAG-GCGTGAGCAT_S26_R1_001.fastq.gz
+  T201h65r12_1_Dam:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_27_T201h65r12_1_Dam_TTGCAATGCG-CGAGACTTCA_S27_R1_001.fastq.gz
+  T201h65r12_1_LB1:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_28_T201h65r12_1_LB1_TGGACAATAG-GAGTCCTGTG_S28_R1_001.fastq.gz
+  T201h65r21_1_Dam:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_29_T201h65r21_1_Dam_AACCGGCCTT-TGTTCAGATC_S29_R1_001.fastq.gz
+  T201h65r21_1_LB1:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_30_T201h65r21_1_LB1_TCACACGGAT-CTTCTGATCG_S30_R1_001.fastq.gz
+  T201h162r6_1_Dam:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_31_T201h162r6_1_Dam_CATTATCGCT-CGAGTTGCTT_S31_R1_001.fastq.gz
+  T201h162r6_1_LB1:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_32_T201h162r6_1_LB1_AGGATACGGT-AACCACGTCA_S32_R1_001.fastq.gz
+  T201h179r28_1_Dam:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_33_T201h179r28_1_Dam_GCTACAGGTC-TTATGCAGGA_S33_R1_001.fastq.gz
+  T201h179r28_1_LB1:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_34_T201h179r28_1_LB1_CGAGTTCGCA-CCGGATTATG_S34_R1_001.fastq.gz
+  T201h179r29_1_Dam:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_35_T201h179r29_1_Dam_GCCAAGTAAC-TGCGTGATGA_S35_R1_001.fastq.gz
+  T201h179r29_1_LB1:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_36_T201h179r29_1_LB1_TCCTACGTGC-TAGGTGCTAT_S36_R1_001.fastq.gz
+  WT_2_Dam:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_37_WT_2_Dam_TTGTGAAGGC-TCGTCAGTAC_S37_R1_001.fastq.gz
+  WT_2_LB1:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_38_WT_2_LB1_CCACGATAAC-CATGCCTGAC_S38_R1_001.fastq.gz
+  T201_2_Dam:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_39_T201_2_Dam_GTCGACTCCT-TGCCGTTAGC_S39_R1_001.fastq.gz
+  T201_2_LB1:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_40_T201_2_LB1_CTTGCGAAGA-AATGACGCGG_S40_R1_001.fastq.gz
+  T201_r20_2_Dam:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_41_T201_r20_2_Dam_CTGAGCTTGT-CTTCTTGCGT_S41_R1_001.fastq.gz
+  T201_r20_2_LB1:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_42_T201_r20_2_LB1_TGGCACGAAC-CCTGACTCTT_S42_R1_001.fastq.gz
+  T48h20_2_Dam:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_43_T48h20_2_Dam_CCTCTGTCAT-CGTATCGATT_S43_R1_001.fastq.gz
+  T48h20_2_LB1:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_44_T48h20_2_LB1_AACGACATCT-GTCTTGGAAT_S44_R1_001.fastq.gz
+  T201h24_2_Dam:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_45_T201h24_2_Dam_GCAGATGTAA-TACACGCCTC_S45_R1_001.fastq.gz
+  T201h24_2_LB1:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_46_T201h24_2_LB1_GCGAGATGGA-ACACTCTACT_S46_R1_001.fastq.gz
+  T201h44_2_Dam:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_47_T201h44_2_Dam_CTCATCATCT-TAAGCCTCTA_S47_R1_001.fastq.gz
+  T201h44_2_LB1:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_48_T201h44_2_LB1_GTCATCGCGT-CCGACAAGGA_S48_R1_001.fastq.gz
+  T201h65_2_Dam:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_49_T201h65_2_Dam_AGTGGTAGCA-TGGTGTTGAC_S49_R1_001.fastq.gz
+  T201h65_2_LB1:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_50_T201h65_2_LB1_CACACTGTTG-TGCATTGGTT_S50_R1_001.fastq.gz
+  T201h162_2_Dam:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_51_T201h162_2_Dam_TATCCAGTTC-TGAGCTACGT_S51_R1_001.fastq.gz
+  T201h162_2_LB1:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_52_T201h162_2_LB1_CTCATTCTGC-TTGAAGCGGT_S52_R1_001.fastq.gz
+  T201h179_2_Dam:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_53_T201h179_2_Dam_AGTCGACGTA-CCATGGAACA_S53_R1_001.fastq.gz
+  T201h179_2_LB1:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_54_T201h179_2_LB1_AACAGTGACT-ATCGCAGTGT_S54_R1_001.fastq.gz
+  T48h20r8_2_Dam:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_55_T48h20r8_2_Dam_TTCGTTCACA-CTGATTAGTG_S55_R1_001.fastq.gz
+  T48h20r8_2_LB1:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_56_T48h20r8_2_LB1_CCACTTGGAT-AATCTCGGTT_S56_R1_001.fastq.gz
+  T48h20r16_2_Dam:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_57_T48h20r16_2_Dam_GACAATGCGG-TTGTTGAGTG_S57_R1_001.fastq.gz
+  T48h20r16_2_LB1:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_58_T48h20r16_2_LB1_TCAGACTGGT-TCGATTACGC_S58_R1_001.fastq.gz
+  T201h24r2_2_Dam:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_59_T201h24r2_2_Dam_AAGTGGCATT-AGAACAATCG_S59_R1_001.fastq.gz
+  T201h24r2_2_LB1:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_60_T201h24r2_2_LB1_GCATAGCCAA-TGGTTCCTGG_S60_R1_001.fastq.gz
+  T201h24r11_2_Dam:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_61_T201h24r11_2_Dam_GCAACCTGAG-GTTCATTGCG_S61_R1_001.fastq.gz
+  T201h24r11_2_LB1:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_62_T201h24r11_2_LB1_ACGTGCATCG-CAGTCAGTTG_S62_R1_001.fastq.gz
+  T201h44r3_2_Dam:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_63_T201h44r3_2_Dam_AGAACCGGAC-TCCTACCATA_S63_R1_001.fastq.gz
+  T201h44r3_2_LB1:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_64_T201h44r3_2_LB1_GCGATGCAGA-TCTTCGTGTA_S64_R1_001.fastq.gz
+  T201h44r14_2_Dam:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_65_T201h44r14_2_Dam_GTGCTATCGA-TTAAGCACCG_S65_R1_001.fastq.gz
+  T201h44r14_2_LB1:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_66_T201h44r14_2_LB1_TTAAGTGCGT-ACCTGTCGCT_S66_R1_001.fastq.gz
+  T201h65r12_2_Dam:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_67_T201h65r12_2_Dam_AGAACCTACA-AGTGTACGGT_S67_R1_001.fastq.gz
+  T201h65r12_2_LB1:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_68_T201h65r12_2_LB1_TCGGAGACCT-AAGGTTACTC_S68_R1_001.fastq.gz
+  T201h65r21_2_Dam:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_69_T201h65r21_2_Dam_ATGGTGTATC-GCAATTGTGG_S69_R1_001.fastq.gz
+  T201h65r21_2_LB1:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_70_T201h65r21_2_LB1_TCCAGCGAAG-GTTCTATGTC_S70_R1_001.fastq.gz
+  T201h162r1_2_Dam:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_71_T201h162r1_2_Dam_CTCAGAATTC-ACAGAGACCG_S71_R1_001.fastq.gz
+  T201h162r1_2_LB1:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_72_T201h162r1_2_LB1_GTACTAAGAG-CGCTCTAGAT_S72_R1_001.fastq.gz
+  T201h162r6_2_Dam:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_73_T201h162r6_2_Dam_TATGATGCAG-AGGCCAGTTG_S73_R1_001.fastq.gz
+  T201h162r6_2_LB1:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_74_T201h162r6_2_LB1_GTCTTCTCGA-TGGTGCCAAC_S74_R1_001.fastq.gz
+  T201h179r28_2_Dam:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_75_T201h179r28_2_Dam_GTGGAGGTAG-ATCGCGTCAC_S75_R1_001.fastq.gz
+  T201h179r28_2_LB1:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_76_T201h179r28_2_LB1_ATACACAGAG-AGTCAGAAGG_S76_R1_001.fastq.gz
+  T201h179r29_2_Dam:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_77_T201h179r29_2_Dam_AGAGGCACGA-ACGTGGAATT_S77_R1_001.fastq.gz
+  T201h179r29_2_LB1:
+    - /shared/gcf/r.schep/6920/fastq_files/6820_78_T201h179r29_2_LB1_AGGTCTATGG-CCGTGAGAAC_S78_R1_001.fastq.gz
+
+
+
+
+# pA-DamID, LaminB1, LAD2 inversions i10 and i12
+  T3h153_1_Dam:
+    - /shared/gcf/l.dauban/6958/fastq_files/6958_1_T3h153_rep1_Dam_GCTACAGGTC-TTATGCAGGA_S2_R1_001.fastq.gz
+  T3h153_1_LB1:
+    - /shared/gcf/l.dauban/6958/fastq_files/6958_9_T3h153_rep1_LB1_CGAGTTCGCA-CCGGATTATG_S14_R1_001.fastq.gz
+  T48h81_1_Dam:
+    - /shared/gcf/l.dauban/6958/fastq_files/6958_2_T48h81_rep1_Dam_GCCAAGTAAC-TGCGTGATGA_S5_R1_001.fastq.gz
+  T48h81_1_LB1:
+    - /shared/gcf/l.dauban/6958/fastq_files/6958_10_T48h81_rep1_LB1_TCCTACGTGC-TAGGTGCTAT_S11_R1_001.fastq.gz
+  T3h153r2_1_Dam:
+    - /shared/gcf/l.dauban/6958/fastq_files/6958_4_T3h153r2_rep1_Dam_GTCGACTCCT-TGCCGTTAGC_S8_R1_001.fastq.gz
+  T3h153r2_1_LB1:
+    - /shared/gcf/l.dauban/6958/fastq_files/6958_12_T3h153r2_rep1_LB1_CTTGCGAAGA-AATGACGCGG_S18_R1_001.fastq.gz
+  T3h153r10_1_Dam:
+    - /shared/gcf/l.dauban/6958/fastq_files/6958_5_T3h153r10_rep1_Dam_CTGAGCTTGT-CTTCTTGCGT_S9_R1_001.fastq.gz
+  T3h153r10_1_LB1:
+    - /shared/gcf/l.dauban/6958/fastq_files/6958_13_T3h153r10_rep1_LB1_TGGCACGAAC-CCTGACTCTT_S20_R1_001.fastq.gz
+  T48h81r18_1_Dam:
+    - /shared/gcf/l.dauban/6958/fastq_files/6958_6_T48h81r18_rep1_Dam_CCTCTGTCAT-CGTATCGATT_S7_R1_001.fastq.gz
+  T48h81r18_1_LB1:
+    - /shared/gcf/l.dauban/6958/fastq_files/6958_14_T48h81r18_rep1_LB1_AACGACATCT-GTCTTGGAAT_S19_R1_001.fastq.gz
+  T48h81r33_1_Dam:
+    - /shared/gcf/l.dauban/6958/fastq_files/6958_7_T48h81r33_rep1_Dam_GCAGATGTAA-TACACGCCTC_S12_R1_001.fastq.gz
+  T48h81r33_1_LB1:
+    - /shared/gcf/l.dauban/6958/fastq_files/6958_15_T48h81r33_rep1_LB1_GCGAGATGGA-ACACTCTACT_S16_R1_001.fastq.gz
+  T3h153_2_Dam:
+    - /shared/gcf/l.dauban/6958/fastq_files/6958_18_T3h153_rep2_Dam_TATCCAGTTC-TGAGCTACGT_S22_R1_001.fastq.gz
+  T3h153_2_LB1:
+    - /shared/gcf/l.dauban/6958/fastq_files/6958_26_T3h153_rep2_LB1_CTCATTCTGC-TTGAAGCGGT_S15_R1_001.fastq.gz
+  T48h81_2_Dam:
+    - /shared/gcf/l.dauban/6958/fastq_files/6958_19_T48h81_rep2_Dam_AGTCGACGTA-CCATGGAACA_S1_R1_001.fastq.gz
+  T48h81_2_LB1:
+    - /shared/gcf/l.dauban/6958/fastq_files/6958_27_T48h81_rep2_LB1_AACAGTGACT-ATCGCAGTGT_S29_R1_001.fastq.gz
+  T3h153r2_2_Dam:
+    - /shared/gcf/l.dauban/6958/fastq_files/6958_21_T3h153r2_rep2_Dam_GACAATGCGG-TTGTTGAGTG_S6_R1_001.fastq.gz
+  T3h153r2_2_LB1:
+    - /shared/gcf/l.dauban/6958/fastq_files/6958_29_T3h153r2_rep2_LB1_TCAGACTGGT-TCGATTACGC_S21_R1_001.fastq.gz
+  T3h153r10_2_Dam:
+    - /shared/gcf/l.dauban/6958/fastq_files/6958_22_T3h153r10_rep2_Dam_AAGTGGCATT-AGAACAATCG_S28_R1_001.fastq.gz
+  T3h153r10_2_LB1:
+    - /shared/gcf/l.dauban/6958/fastq_files/6958_30_T3h153r10_rep2_LB1_GCATAGCCAA-TGGTTCCTGG_S31_R1_001.fastq.gz
+  T48h81r18_2_Dam:
+    - /shared/gcf/l.dauban/6958/fastq_files/6958_23_T48h81r18_rep2_Dam_GCAACCTGAG-GTTCATTGCG_S10_R1_001.fastq.gz
+  T48h81r18_2_LB1:
+    - /shared/gcf/l.dauban/6958/fastq_files/6958_31_T48h81r18_rep2_LB1_ACGTGCATCG-CAGTCAGTTG_S25_R1_001.fastq.gz
+  T48h81r33_2_Dam:
+    - /shared/gcf/l.dauban/6958/fastq_files/6958_24_T48h81r33_rep2_Dam_AGAACCGGAC-TCCTACCATA_S27_R1_001.fastq.gz
+  T48h81r33_2_LB1:
+    - /shared/gcf/l.dauban/6958/fastq_files/6958_32_T48h81r33_rep2_LB1_GCGATGCAGA-TCTTCGTGTA_S32_R1_001.fastq.gz
+
+
+
+
+# pA-DamID, LaminB1, LAD1 inversions i7 and i9
+  T201h49_Dam_A_LB:
+    - /shared/gcf/l.dauban/7019/fastq_files/7019_4_pA-DamID_T201_H49_Dam_only_A_LB_AATCGAACTC-ACGAACCTTA_S8_R1_001.fastq.gz
+  T201h49r7_Dam_A_LB:
+    - /shared/gcf/l.dauban/7019/fastq_files/7019_5_pA-DamID_T201_H49_R7_Dam_only_A_LB_CATTGAGCTA-ACTTCACATC_S9_R1_001.fastq.gz
+  T201h49r12_Dam_A_LB:
+    - /shared/gcf/l.dauban/7019/fastq_files/7019_6_pA-DamID_T201_H49_R12_Dam_only_A_LB_GCTACAGGTC-TTATGCAGGA_S7_R1_001.fastq.gz
+  T201h143_Dam_A_LB:
+    - /shared/gcf/l.dauban/7019/fastq_files/7019_7_pA-DamID_T201_H143_Dam_only_A_LB_CGAGTTCGCA-CCGGATTATG_S12_R1_001.fastq.gz
+  T201h143r12_Dam_A_LB:
+    - /shared/gcf/l.dauban/7019/fastq_files/7019_8_pA-DamID_T201_H143_R12_Dam_only_A_LB_AGTGGTAGCA-TGGTGTTGAC_S13_R1_001.fastq.gz
+  T201h143r14_Dam_A_LB:
+    - /shared/gcf/l.dauban/7019/fastq_files/7019_9_pA-DamID_T201_H143_R14_Dam_only_A_LB_CACACTGTTG-TGCATTGGTT_S14_R1_001.fastq.gz
+  T201h49_LaminB1_A:
+    - /shared/gcf/l.dauban/7019/fastq_files/7019_13_pA-DamID_T201_H49_LaminB1_A_AGGCTGGAGA-CAACTGTCAT_S19_R1_001.fastq.gz
+  T201h49r7_LaminB1_A:
+    - /shared/gcf/l.dauban/7019/fastq_files/7019_14_pA-DamID_T201_H49_R7_LaminB1_A_CTTCGGAATC-CGTCGGTAAG_S20_R1_001.fastq.gz
+  T201h49r12_LaminB1_A:
+    - /shared/gcf/l.dauban/7019/fastq_files/7019_15_pA-DamID_T201_H49_R12_LaminB1_A_GCCAAGTAAC-TGCGTGATGA_S16_R1_001.fastq.gz
+  T201h143_LaminB1_A:
+    - /shared/gcf/l.dauban/7019/fastq_files/7019_16_pA-DamID_T201_H143_LaminB1_A_TCCTACGTGC-TAGGTGCTAT_S23_R1_001.fastq.gz
+  T201h143r12_LaminB1_A:
+    - /shared/gcf/l.dauban/7019/fastq_files/7019_17_pA-DamID_T201_H143_R12_LaminB1_A_TATCCAGTTC-TGAGCTACGT_S24_R1_001.fastq.gz
+  T201h143r14_LaminB1_A:
+    - /shared/gcf/l.dauban/7019/fastq_files/7019_18_pA-DamID_T201_H143_R14_LaminB1_A_CTCATTCTGC-TTGAAGCGGT_S25_R1_001.fastq.gz
+  T201h49_Dam_B_LB:
+    - /shared/gcf/l.dauban/7019/fastq_files/7019_22_pA-DamID_T201_H49_Dam_only_B_LB_TAAGCCACGC-TTACGAACGA_S30_R1_001.fastq.gz
+  T201h49r7_Dam_B_LB:
+    - /shared/gcf/l.dauban/7019/fastq_files/7019_23_pA-DamID_T201_H49_R7_Dam_only_B_LB_AACCACACTA-CCTCTGCTGA_S31_R1_001.fastq.gz
+  T201h49r12_Dam_B_LB:
+    - /shared/gcf/l.dauban/7019/fastq_files/7019_24_pA-DamID_T201_H49_R12_Dam_only_B_LB_TTGTGAAGGC-TCGTCAGTAC_S32_R1_001.fastq.gz
+  T201h143_Dam_B_LB:
+    - /shared/gcf/l.dauban/7019/fastq_files/7019_25_pA-DamID_T201_H143_Dam_only_B_LB_CCACGATAAC-CATGCCTGAC_S33_R1_001.fastq.gz
+  T201h143r12_Dam_B_LB:
+    - /shared/gcf/l.dauban/7019/fastq_files/7019_26_pA-DamID_T201_H143_R12_Dam_only_B_LB_AGTCGACGTA-CCATGGAACA_S34_R1_001.fastq.gz
+  T201h143r14_Dam_B_LB:
+    - /shared/gcf/l.dauban/7019/fastq_files/7019_27_pA-DamID_T201_H143_R14_Dam_only_B_LB_AACAGTGACT-ATCGCAGTGT_S35_R1_001.fastq.gz
+  T201h49_LaminB1_B:
+    - /shared/gcf/l.dauban/7019/fastq_files/7019_31_pA-DamID_T201_H49_LaminB1_B_TCAATCAGAG-GACTCTGGTT_S40_R1_001.fastq.gz
+  T201h49r7_LaminB1_B:
+    - /shared/gcf/l.dauban/7019/fastq_files/7019_32_pA-DamID_T201_H49_R7_LaminB1_B_GTACAGCGGA-CAATCTGTGT_S41_R1_001.fastq.gz
+  T201h49r12_LaminB1_B:
+    - /shared/gcf/l.dauban/7019/fastq_files/7019_33_pA-DamID_T201_H49_R12_LaminB1_B_GTCGACTCCT-TGCCGTTAGC_S42_R1_001.fastq.gz
+  T201h143_LaminB1_B:
+    - /shared/gcf/l.dauban/7019/fastq_files/7019_34_pA-DamID_T201_H143_LaminB1_B_CTTGCGAAGA-AATGACGCGG_S43_R1_001.fastq.gz
+  T201h143r12_LaminB1_B:
+    - /shared/gcf/l.dauban/7019/fastq_files/7019_35_pA-DamID_T201_H143_R12_LaminB1_B_TTCGTTCACA-CTGATTAGTG_S44_R1_001.fastq.gz
+  T201h143r14_LaminB1_B:
+    - /shared/gcf/l.dauban/7019/fastq_files/7019_36_pA-DamID_T201_H143_R14_LaminB1_B_CCACTTGGAT-AATCTCGGTT_S37_R1_001.fastq.gz
+  T201h49_deep_Dam_A_LB:
+    - /shared/gcf/m.martinez.ara/7151/NOVA138_fastq_files/7151_33_T201h49_Dam_only_A_CATTGAGCTA-ACTTCACATC_S39_R1_001.fastq.gz
+  T201h49r7_deep_Dam_A_LB:
+    - /shared/gcf/m.martinez.ara/7151/NOVA138_fastq_files/7151_34_T201h49r7_Dam_only_A_CTTCGGAATC-CGTCGGTAAG_S38_R1_001.fastq.gz
+  T201h49r12_deep_Dam_A_LB:
+    - /shared/gcf/m.martinez.ara/7151/NOVA138_fastq_files/7151_35_T201h49r12_Dam_only_A_AACCACACTA-CCTCTGCTGA_S40_R1_001.fastq.gz
+  T201h143_deep_Dam_A_LB:
+    - /shared/gcf/m.martinez.ara/7151/NOVA138_fastq_files/7151_36_T201h143_Dam_only_A_GTACAGCGGA-CAATCTGTGT_S37_R1_001.fastq.gz
+  T201h143r12_deep_Dam_A_LB:
+    - /shared/gcf/m.martinez.ara/7151/NOVA138_fastq_files/7151_37_T201h143r12_Dam_only_A_ACTTCAACAG-GCGTGAGCAT_S1_R1_001.fastq.gz
+  T201h143r14_deep_Dam_A_LB:
+    - /shared/gcf/m.martinez.ara/7151/NOVA138_fastq_files/7151_38_T201h143r14_Dam_only_A_TGGACAATAG-GAGTCCTGTG_S3_R1_001.fastq.gz
+  T201h49_deep_LaminB1_A:
+    - /shared/gcf/m.martinez.ara/7151/NOVA138_fastq_files/7151_39_T201h49_LB1_A_TCACACGGAT-CTTCTGATCG_S6_R1_001.fastq.gz
+  T201h49r7_deep_LaminB1_A:
+    - /shared/gcf/m.martinez.ara/7151/NOVA138_fastq_files/7151_40_T201h49r7_LB1_A_AGGATACGGT-AACCACGTCA_S48_R1_001.fastq.gz
+  T201h49r12_deep_LaminB1_A:
+    - /shared/gcf/m.martinez.ara/7151/NOVA138_fastq_files/7151_41_T201h49r12_LB1_A_GCTACAGGTC-TTATGCAGGA_S10_R1_001.fastq.gz
+  T201h143_deep_LaminB1_A:
+    - /shared/gcf/m.martinez.ara/7151/NOVA138_fastq_files/7151_42_T201h143_LB1_A_GCCAAGTAAC-TGCGTGATGA_S49_R1_001.fastq.gz
+  T201h143r12_deep_LaminB1_A:
+    - /shared/gcf/m.martinez.ara/7151/NOVA138_fastq_files/7151_43_T201h143r12_LB1_A_TTGTGAAGGC-TCGTCAGTAC_S47_R1_001.fastq.gz
+  T201h143r14_deep_LaminB1_A:
+    - /shared/gcf/m.martinez.ara/7151/NOVA138_fastq_files/7151_44_T201h143r14_LB1_A_GTCGACTCCT-TGCCGTTAGC_S15_R1_001.fastq.gz
+  T201h49_deep_Dam_B_LB:
+    - /shared/gcf/m.martinez.ara/7151/NOVA138_fastq_files/7151_45_T201h49_Dam_only_B_CTGAGCTTGT-CTTCTTGCGT_S46_R1_001.fastq.gz
+  T201h49r7_deep_Dam_B_LB:
+    - /shared/gcf/m.martinez.ara/7151/NOVA138_fastq_files/7151_46_T201h49r7_Dam_only_B_CCTCTGTCAT-CGTATCGATT_S52_R1_001.fastq.gz
+  T201h49r12_deep_Dam_B_LB:
+    - /shared/gcf/m.martinez.ara/7151/NOVA138_fastq_files/7151_47_T201h49r12_Dam_only_B_GCAGATGTAA-TACACGCCTC_S21_R1_001.fastq.gz
+  T201h143_deep_Dam_B_LB:
+    - /shared/gcf/m.martinez.ara/7151/NOVA138_fastq_files/7151_48_T201h143_Dam_only_B_CTCATCATCT-TAAGCCTCTA_S53_R1_001.fastq.gz
+  T201h143r12_deep_Dam_B_LB:
+    - /shared/gcf/m.martinez.ara/7151/NOVA138_fastq_files/7151_49_T201h143r12_Dam_only_B_TCTTAGGTGG-GATCACTGGT_S51_R1_001.fastq.gz
+  T201h143r14_deep_Dam_B_LB:
+    - /shared/gcf/m.martinez.ara/7151/NOVA138_fastq_files/7151_50_T201h143r14_Dam_only_B_TCCTACGTGC-TAGGTGCTAT_S28_R1_001.fastq.gz
+  T201h49_deep_LaminB1_B:
+    - /shared/gcf/m.martinez.ara/7151/NOVA138_fastq_files/7151_51_T201h49_LB1_B_CCACGATAAC-CATGCCTGAC_S56_R1_001.fastq.gz
+  T201h49r7_deep_LaminB1_B:
+    - /shared/gcf/m.martinez.ara/7151/NOVA138_fastq_files/7151_52_T201h49r7_LB1_B_CTTGCGAAGA-AATGACGCGG_S57_R1_001.fastq.gz
+  T201h49r12_deep_LaminB1_B:
+    - /shared/gcf/m.martinez.ara/7151/NOVA138_fastq_files/7151_53_T201h49r12_LB1_B_TGGCACGAAC-CCTGACTCTT_S55_R1_001.fastq.gz
+  T201h143_deep_LaminB1_B:
+    - /shared/gcf/m.martinez.ara/7151/NOVA138_fastq_files/7151_54_T201h143_LB1_B_AACGACATCT-GTCTTGGAAT_S36_R1_001.fastq.gz
+  T201h143r12_deep_LaminB1_B:
+    - /shared/gcf/m.martinez.ara/7151/NOVA138_fastq_files/7151_55_T201h143r12_LB1_B_GCGAGATGGA-ACACTCTACT_S62_R1_001.fastq.gz
+  T201h143r14_deep_LaminB1_B:
+    - /shared/gcf/m.martinez.ara/7151/NOVA138_fastq_files/7151_56_T201h143r14_LB1_B_GTCATCGCGT-CCGACAAGGA_S61_R1_001.fastq.gz
+
+
+
+
+ # pA-DamID, LaminB1, R4-5 and R2-3 isolation in an iLAD and close to LAD4
+  T201h51r58_WT1_1_Dam:
+    - /shared/gcf/l.dauban/7298/NOVA171_fastq_files/7298_3_T201h51r58_1_Dam_TAAGCCACGC-TTACGAACGA_S4_R1_001.fastq.gz
+  T201h143r12_1_Dam:
+    - /shared/gcf/l.dauban/7298/NOVA171_fastq_files/7298_4_T201h143r12_1_Dam_TCAATCAGAG-GACTCTGGTT_S8_R1_001.fastq.gz
+  T201h51r58_WT1_1_LB1:
+    - /shared/gcf/l.dauban/7298/NOVA171_fastq_files/7298_11_T201h51r58_1_LB1_AACCACACTA-CCTCTGCTGA_S17_R1_001.fastq.gz
+  T201h143r12_1_LB1:
+    - /shared/gcf/l.dauban/7298/NOVA171_fastq_files/7298_12_T201h143r12_1_LB1_GTACAGCGGA-CAATCTGTGT_S18_R1_001.fastq.gz
+  Pool4_cl81_1_Dam:
+    - /shared/gcf/l.dauban/7298/NOVA171_fastq_files/7298_19_Pool4_cl81_1_Dam_TTGTGAAGGC-TCGTCAGTAC_S26_R1_001.fastq.gz
+  Pool4_cl81_1_LB1:
+    - /shared/gcf/l.dauban/7298/NOVA171_fastq_files/7298_27_Pool4_cl81_1_LB1_CCACGATAAC-CATGCCTGAC_S35_R1_001.fastq.gz
+  Pool7_cl84_1_Dam:
+    - /shared/gcf/l.dauban/7298/NOVA171_fastq_files/7298_23_Pool7_cl84_1_Dam_GCAGATGTAA-TACACGCCTC_S31_R1_001.fastq.gz
+  Pool7_cl127_1_Dam:
+    - /shared/gcf/l.dauban/7298/NOVA171_fastq_files/7298_24_Pool7_cl127_1_Dam_CTCATCATCT-TAAGCCTCTA_S32_R1_001.fastq.gz
+  Pool7_cl84_1_LB1:
+    - /shared/gcf/l.dauban/7298/NOVA171_fastq_files/7298_31_Pool7_cl84_1_LB1_GCGAGATGGA-ACACTCTACT_S42_R1_001.fastq.gz
+  Pool7_cl127_1_LB1:
+    - /shared/gcf/l.dauban/7298/NOVA171_fastq_files/7298_32_Pool7_cl127_1_LB1_GTCATCGCGT-CCGACAAGGA_S39_R1_001.fastq.gz
+  Pool8_cl58_1_Dam:
+    - /shared/gcf/l.dauban/7298/NOVA171_fastq_files/7298_33_Pool8_cl58_1_Dam_AGTGGTAGCA-TGGTGTTGAC_S38_R1_001.fastq.gz
+  Pool8_cl58_1_LB1:
+    - /shared/gcf/l.dauban/7298/NOVA171_fastq_files/7298_41_Pool8_cl58_1_LB1_CACACTGTTG-TGCATTGGTT_S45_R1_001.fastq.gz
+  T201h51r58_WT1_2_Dam:
+    - /shared/gcf/l.dauban/7298/NOVA171_fastq_files/7298_36_T201h51r58_2_Dam_TTCGTTCACA-CTGATTAGTG_S3_R1_001.fastq.gz
+  T201h143r12_2_Dam:
+    - /shared/gcf/l.dauban/7298/NOVA171_fastq_files/7298_37_T201h143r12_2_Dam_GACAATGCGG-TTGTTGAGTG_S6_R1_001.fastq.gz
+  T201h51r58_WT1_2_LB1:
+    - /shared/gcf/l.dauban/7298/NOVA171_fastq_files/7298_44_T201h51r58_2_LB1_CCACTTGGAT-AATCTCGGTT_S50_R1_001.fastq.gz
+  T201h143r12_2_LB1:
+    - /shared/gcf/l.dauban/7298/NOVA171_fastq_files/7298_45_T201h143r12_2_LB1_TCAGACTGGT-TCGATTACGC_S21_R1_001.fastq.gz
+  Pool4_cl81_2_Dam:
+    - /shared/gcf/l.dauban/7298/NOVA171_fastq_files/7298_52_Pool4_cl81_2_Dam_CTCAGAATTC-ACAGAGACCG_S36_R1_001.fastq.gz
+  Pool4_cl81_2_LB1:
+    - /shared/gcf/l.dauban/7298/NOVA171_fastq_files/7298_60_Pool4_cl81_2_LB1_GTACTAAGAG-CGCTCTAGAT_S52_R1_001.fastq.gz
+  Pool7_cl84_2_Dam:
+    - /shared/gcf/l.dauban/7298/NOVA171_fastq_files/7298_56_Pool7_cl84_2_Dam_TTGGCTCCAA-GTCTGATCCG_S43_R1_001.fastq.gz
+  Pool7_cl127_2_Dam:
+    - /shared/gcf/l.dauban/7298/NOVA171_fastq_files/7298_65_Pool7_cl127_2_Dam_CGTGGCAGAA-TCTTCCGATG_S65_R1_001.fastq.gz
+  Pool7_cl84_2_LB1:
+    - /shared/gcf/l.dauban/7298/NOVA171_fastq_files/7298_64_Pool7_cl84_2_LB1_ACCTCATTGA-TATCCGATCT_S64_R1_001.fastq.gz
+  Pool7_cl127_2_LB1:
+    - /shared/gcf/l.dauban/7298/NOVA171_fastq_files/7298_67_Pool7_cl127_2_LB1_TAAGGCGATC-GTTAGCACAA_S67_R1_001.fastq.gz
+  Pool8_cl58_2_Dam:
+    - /shared/gcf/l.dauban/7298/NOVA171_fastq_files/7298_66_Pool8_cl58_2_Dam_CAACAGGTAG-GACGATAGTG_S66_R1_001.fastq.gz
+  Pool8_cl58_2_LB1:
+    - /shared/gcf/l.dauban/7298/NOVA171_fastq_files/7298_68_Pool8_cl58_2_LB1_AATCCAGGAT-CATGCAGAGT_S68_R1_001.fastq.gz
+  T201h51r58_WT2_1_Dam:
+    - /shared/gcf/l.dauban/7384/NOVA193_fastq_files/7384_1_T201h51r58_1_Dam_TTAAGTGCGT-ACCTGTCGCT_S2_R1_001.fastq.gz
+  T201h51r58_WT2_1_LB1:
+    - /shared/gcf/l.dauban/7384/NOVA193_fastq_files/7384_2_T201h51r58_1_LB1_TCGGAGACCT-AAGGTTACTC_S5_R1_001.fastq.gz
+  Pool3_cl70_1_Dam:
+    - /shared/gcf/l.dauban/7384/NOVA193_fastq_files/7384_3_Pool3_cl70_1_Dam_TCCAGCGAAG-GTTCTATGTC_S4_R1_001.fastq.gz
+  Pool3_cl70_1_LB1:
+    - /shared/gcf/l.dauban/7384/NOVA193_fastq_files/7384_4_Pool3_cl70_1_LB1_GTACTAAGAG-CGCTCTAGAT_S8_R1_001.fastq.gz
+  Pool3_cl83_1_Dam:
+    - /shared/gcf/l.dauban/7384/NOVA193_fastq_files/7384_5_Pool3_cl83_1_Dam_GTCTTCTCGA-TGGTGCCAAC_S9_R1_001.fastq.gz
+  Pool3_cl83_1_LB1:
+    - /shared/gcf/l.dauban/7384/NOVA193_fastq_files/7384_6_Pool3_cl83_1_LB1_ATACACAGAG-AGTCAGAAGG_S7_R1_001.fastq.gz
+  T201h51r58_WT2_2_Dam:
+    - /shared/gcf/l.dauban/7384/NOVA193_fastq_files/7384_7_T201h51r58_2_Dam_CGTGGCAGAA-TCTTCCGATG_S12_R1_001.fastq.gz
+  T201h51r58_WT2_2_LB1:
+    - /shared/gcf/l.dauban/7384/NOVA193_fastq_files/7384_8_T201h51r58_2_LB1_CAACAGGTAG-GACGATAGTG_S13_R1_001.fastq.gz
+  Pool3_cl70_2_Dam:
+    - /shared/gcf/l.dauban/7384/NOVA193_fastq_files/7384_9_Pool3_cl70_2_Dam_TGATTCCACA-CTCTAGCCGT_S14_R1_001.fastq.gz
+  Pool3_cl70_2_LB1:
+    - /shared/gcf/l.dauban/7384/NOVA193_fastq_files/7384_10_Pool3_cl70_2_LB1_TAAGGCGATC-GTTAGCACAA_S11_R1_001.fastq.gz
+  Pool3_cl83_2_Dam:
+    - /shared/gcf/l.dauban/7384/NOVA193_fastq_files/7384_11_Pool3_cl83_2_Dam_AATCCAGGAT-CATGCAGAGT_S19_R1_001.fastq.gz
+  Pool3_cl83_2_LB1:
+    - /shared/gcf/l.dauban/7384/NOVA193_fastq_files/7384_12_Pool3_cl83_2_LB1_AAGGTACCGT-CTGATCTTGT_S17_R1_001.fastq.gz
+  T201h51r58_WT1_deep_1_Dam:
+    - /shared/gcf/l.dauban/7425/NOVA201_fastq_files/7425_1_WT1_T201h51r58_1_Dam_TAAGCCACGC-TTACGAACGA_S2_R1_001.fastq.gz
+  T201h143r12_deep_1_Dam:
+    - /shared/gcf/l.dauban/7425/NOVA201_fastq_files/7425_3_T201h143r12_1_Dam_TCAATCAGAG-GACTCTGGTT_S4_R1_001.fastq.gz
+  T201h51r58_WT1_deep_1_LB1:
+    - /shared/gcf/l.dauban/7425/NOVA201_fastq_files/7425_2_WT1_T201h51r58_1_LB1_AACCACACTA-CCTCTGCTGA_S5_R1_001.fastq.gz
+  T201h143r12_deep_1_LB1:
+    - /shared/gcf/l.dauban/7425/NOVA201_fastq_files/7425_4_T201h143r12_1_LB1_GTACAGCGGA-CAATCTGTGT_S8_R1_001.fastq.gz
+  Pool4_cl81_deep_1_Dam:
+    - /shared/gcf/l.dauban/7425/NOVA201_fastq_files/7425_5_Pool4_cl81_1_Dam_TTGTGAAGGC-TCGTCAGTAC_S9_R1_001.fastq.gz
+  Pool4_cl81_deep_1_LB1:
+    - /shared/gcf/l.dauban/7425/NOVA201_fastq_files/7425_6_Pool4_cl81_1_LB1_CCACGATAAC-CATGCCTGAC_S7_R1_001.fastq.gz
+  Pool7_cl84_deep_1_Dam:
+    - /shared/gcf/l.dauban/7425/NOVA201_fastq_files/7425_7_Pool7_cl84_1_Dam_GCAGATGTAA-TACACGCCTC_S12_R1_001.fastq.gz
+  Pool7_cl127_deep_1_Dam:
+    - /shared/gcf/l.dauban/7425/NOVA201_fastq_files/7425_9_Pool7_cl127_1_Dam_CTCATCATCT-TAAGCCTCTA_S14_R1_001.fastq.gz
+  Pool7_cl84_deep_1_LB1:
+    - /shared/gcf/l.dauban/7425/NOVA201_fastq_files/7425_8_Pool7_cl84_1_LB1_GCGAGATGGA-ACACTCTACT_S13_R1_001.fastq.gz
+  Pool7_cl127_deep_1_LB1:
+    - /shared/gcf/l.dauban/7425/NOVA201_fastq_files/7425_10_Pool7_cl127_1_LB1_GTCATCGCGT-CCGACAAGGA_S11_R1_001.fastq.gz
+  Pool8_cl58_deep_1_Dam:
+    - /shared/gcf/l.dauban/7425/NOVA201_fastq_files/7425_11_Pool8_cl58_1_Dam_AGTGGTAGCA-TGGTGTTGAC_S17_R1_001.fastq.gz
+  Pool8_cl58_deep_1_LB1:
+    - /shared/gcf/l.dauban/7425/NOVA201_fastq_files/7425_12_Pool8_cl58_1_LB1_CACACTGTTG-TGCATTGGTT_S18_R1_001.fastq.gz
+  T201h51r58_WT1_deep_2_Dam:
+    - /shared/gcf/l.dauban/7425/NOVA201_fastq_files/7425_13_WT1_T201h51r58_2_Dam_TTCGTTCACA-CTGATTAGTG_S20_R1_001.fastq.gz
+  T201h143r12_deep_2_Dam:
+    - /shared/gcf/l.dauban/7425/NOVA201_fastq_files/7425_15_T201h143r12_2_Dam_GACAATGCGG-TTGTTGAGTG_S16_R1_001.fastq.gz
+  T201h51r58_WT1_deep_2_LB1:
+    - /shared/gcf/l.dauban/7425/NOVA201_fastq_files/7425_14_WT1_T201h51r58_2_LB1_CCACTTGGAT-AATCTCGGTT_S19_R1_001.fastq.gz
+  T201h143r12_deep_2_LB1:
+    - /shared/gcf/l.dauban/7425/NOVA201_fastq_files/7425_16_T201h143r12_2_LB1_TCAGACTGGT-TCGATTACGC_S24_R1_001.fastq.gz
+  Pool4_cl81_deep_2_Dam:
+    - /shared/gcf/l.dauban/7425/NOVA201_fastq_files/7425_17_Pool4_cl81_2_Dam_CTCAGAATTC-ACAGAGACCG_S23_R1_001.fastq.gz
+  Pool4_cl81_deep_2_LB1:
+    - /shared/gcf/l.dauban/7425/NOVA201_fastq_files/7425_18_Pool4_cl81_2_LB1_GTACTAAGAG-CGCTCTAGAT_S22_R1_001.fastq.gz
+  Pool7_cl84_deep_2_Dam:
+    - /shared/gcf/l.dauban/7425/NOVA201_fastq_files/7425_19_Pool7_cl84_2_Dam_TTGGCTCCAA-GTCTGATCCG_S1_R1_001.fastq.gz
+  Pool7_cl127_deep_2_Dam:
+    - /shared/gcf/l.dauban/7425/NOVA201_fastq_files/7425_21_Pool7_cl127_2_Dam_CGTGGCAGAA-TCTTCCGATG_S6_R1_001.fastq.gz
+  Pool7_cl84_deep_2_LB1:
+    - /shared/gcf/l.dauban/7425/NOVA201_fastq_files/7425_20_Pool7_cl84_2_LB1_ACCTCATTGA-TATCCGATCT_S3_R1_001.fastq.gz
+  Pool7_cl127_deep_2_LB1:
+    - /shared/gcf/l.dauban/7425/NOVA201_fastq_files/7425_22_Pool7_cl127_2_LB1_TAAGGCGATC-GTTAGCACAA_S28_R1_001.fastq.gz
+  Pool8_cl58_deep_2_Dam:
+    - /shared/gcf/l.dauban/7425/NOVA201_fastq_files/7425_23_Pool8_cl58_2_Dam_CAACAGGTAG-GACGATAGTG_S10_R1_001.fastq.gz
+  Pool8_cl58_deep_2_LB1:
+    - /shared/gcf/l.dauban/7425/NOVA201_fastq_files/7425_24_Pool8_cl58_2_LB1_AATCCAGGAT-CATGCAGAGT_S27_R1_001.fastq.gz
+  T201h51r58_WT2_deep_1_Dam:
+    - /shared/gcf/l.dauban/7425/NOVA201_fastq_files/7425_25_WT2_T201h51r58_1_Dam_TTAAGTGCGT-ACCTGTCGCT_S26_R1_001.fastq.gz
+  T201h51r58_WT2_deep_1_LB1:
+    - /shared/gcf/l.dauban/7425/NOVA201_fastq_files/7425_26_WT2_T201h51r58_1_LB1_TCGGAGACCT-AAGGTTACTC_S15_R1_001.fastq.gz
+  Pool3_cl70_deep_1_Dam:
+    - /shared/gcf/l.dauban/7425/NOVA201_fastq_files/7425_27_Pool3_cl70_1_Dam_TCCAGCGAAG-GTTCTATGTC_S29_R1_001.fastq.gz
+  Pool3_cl70_deep_1_LB1:
+    - /shared/gcf/l.dauban/7425/NOVA201_fastq_files/7425_28_Pool3_cl70_1_LB1_TCCTACGTGC-TAGGTGCTAT_S30_R1_001.fastq.gz
+  Pool3_cl83_deep_1_Dam:
+    - /shared/gcf/l.dauban/7425/NOVA201_fastq_files/7425_29_Pool3_cl83_1_Dam_TATCCAGTTC-TGAGCTACGT_S21_R1_001.fastq.gz
+  Pool3_cl83_deep_1_LB1:
+    - /shared/gcf/l.dauban/7425/NOVA201_fastq_files/7425_30_Pool3_cl83_1_LB1_ATACACAGAG-AGTCAGAAGG_S31_R1_001.fastq.gz
+  T201h51r58_WT2_deep_2_Dam:
+    - /shared/gcf/l.dauban/7425/NOVA201_fastq_files/7425_31_WT2_T201h51r58_2_Dam_CTCATTCTGC-TTGAAGCGGT_S25_R1_001.fastq.gz
+  T201h51r58_WT2_deep_2_LB1:
+    - /shared/gcf/l.dauban/7425/NOVA201_fastq_files/7425_32_WT2_T201h51r58_2_LB1_AGAACCTACA-AGTGTACGGT_S32_R1_001.fastq.gz
+  Pool3_cl70_deep_2_Dam:
+    - /shared/gcf/l.dauban/7425/NOVA201_fastq_files/7425_33_Pool3_cl70_2_Dam_TGATTCCACA-CTCTAGCCGT_S33_R1_001.fastq.gz
+  Pool3_cl70_deep_2_LB1:
+    - /shared/gcf/l.dauban/7425/NOVA201_fastq_files/7425_34_Pool3_cl70_2_LB1_AACGACATCT-GTCTTGGAAT_S34_R1_001.fastq.gz
+  Pool3_cl83_deep_2_Dam:
+    - /shared/gcf/l.dauban/7425/NOVA201_fastq_files/7425_35_Pool3_cl83_2_Dam_AAGTGGCATT-AGAACAATCG_S35_R1_001.fastq.gz
+  Pool3_cl83_deep_2_LB1:
+    - /shared/gcf/l.dauban/7425/NOVA201_fastq_files/7425_36_Pool3_cl83_2_LB1_AAGGTACCGT-CTGATCTTGT_S36_R1_001.fastq.gz
+
+
+
+
+# pA-DamID, LaminB1, R4-5 CRISPR deletion
+  WT_rep1_Dam:
+    - /shared/gcf/l.dauban/7232/NOVA154_fastq_files/7232_1_WT_rep1_Dam_CATTGAGCTA-ACTTCACATC_S2_R1_001.fastq.gz
+  WT_rep1_LB1:
+    - /shared/gcf/l.dauban/7232/NOVA154_fastq_files/7232_2_WT_rep1_LB1_CTTCGGAATC-CGTCGGTAAG_S5_R1_001.fastq.gz
+  II_cl92_rep1_Dam:
+    - /shared/gcf/l.dauban/7232/NOVA154_fastq_files/7232_7_II_cl92_rep1_Dam_TCACACGGAT-CTTCTGATCG_S12_R1_001.fastq.gz
+  II_cl92_rep1_LB1:
+    - /shared/gcf/l.dauban/7232/NOVA154_fastq_files/7232_8_II_cl92_rep1_LB1_AGGATACGGT-AACCACGTCA_S13_R1_001.fastq.gz
+  II_cl165_rep1_Dam:
+    - /shared/gcf/l.dauban/7232/NOVA154_fastq_files/7232_9_II_cl165_rep1_Dam_GCTACAGGTC-TTATGCAGGA_S14_R1_001.fastq.gz
+  II_cl165_rep1_LB1:
+    - /shared/gcf/l.dauban/7232/NOVA154_fastq_files/7232_10_II_cl165_rep1_LB1_GCCAAGTAAC-TGCGTGATGA_S11_R1_001.fastq.gz
+  WT_rep2_Dam:
+    - /shared/gcf/l.dauban/7232/NOVA154_fastq_files/7232_11_WT_rep2_Dam_TTGTGAAGGC-TCGTCAGTAC_S17_R1_001.fastq.gz
+  WT_rep2_LB1:
+    - /shared/gcf/l.dauban/7232/NOVA154_fastq_files/7232_12_WT_rep2_LB1_GTCGACTCCT-TGCCGTTAGC_S18_R1_001.fastq.gz
+  II_cl92_rep2_Dam:
+    - /shared/gcf/l.dauban/7232/NOVA154_fastq_files/7232_17_II_cl92_rep2_Dam_CGAGTTCGCA-CCGGATTATG_S24_R1_001.fastq.gz
+  II_cl92_rep2_LB1:
+    - /shared/gcf/l.dauban/7232/NOVA154_fastq_files/7232_18_II_cl92_rep2_LB1_TCCTACGTGC-TAGGTGCTAT_S25_R1_001.fastq.gz
+  II_cl165_rep2_Dam:
+    - /shared/gcf/l.dauban/7232/NOVA154_fastq_files/7232_19_II_cl165_rep2_Dam_CCACGATAAC-CATGCCTGAC_S26_R1_001.fastq.gz
+  II_cl165_rep2_LB1:
+    - /shared/gcf/l.dauban/7232/NOVA154_fastq_files/7232_20_II_cl165_rep2_LB1_CTTGCGAAGA-AATGACGCGG_S27_R1_001.fastq.gz
+
+
+
+
+ # pA-DamID, LaminB1, LAD2 deletion, d11
+  T3_Dam_A_LB:
+    - /shared/gcf/l.dauban/7019/fastq_files/7019_1_pA-DamID_T3_Dam_only_A_LB_CAACCATACA-ACCGGTTATA_S2_R1_001.fastq.gz
+  T3r6_Dam_A_LB:
+    - /shared/gcf/l.dauban/7019/fastq_files/7019_2_pA-DamID_T3_R6_Dam_only_A_LB_ACCTTCGGAC-GACCGTAGAT_S5_R1_001.fastq.gz
+  T3r21_Dam_A_LB:
+    - /shared/gcf/l.dauban/7019/fastq_files/7019_3_pA-DamID_T3_R21_Dam_only_A_LB_TTCTACCGGC-TACTCGTAAG_S4_R1_001.fastq.gz
+  T3_LaminB1_A:
+    - /shared/gcf/l.dauban/7019/fastq_files/7019_10_pA-DamID_T3_LaminB1_A_GTAGGCCGTT-GCCACTGTCT_S11_R1_001.fastq.gz
+  T3r6_LaminB1_A:
+    - /shared/gcf/l.dauban/7019/fastq_files/7019_11_pA-DamID_T3_R6_LaminB1_A_TATCATGTCG-TAATCTGCAC_S17_R1_001.fastq.gz
+  T3r21_LaminB1_A:
+    - /shared/gcf/l.dauban/7019/fastq_files/7019_12_pA-DamID_T3_R21_LaminB1_A_GTGAGAGTAT-ATCTGTGAGG_S18_R1_001.fastq.gz
+  T3_Dam_B_LB:
+    - /shared/gcf/l.dauban/7019/fastq_files/7019_19_pA-DamID_T3_Dam_only_B_LB_CGGATTGATC-AGTCACAACA_S26_R1_001.fastq.gz
+  T3r6_Dam_B_LB:
+    - /shared/gcf/l.dauban/7019/fastq_files/7019_20_pA-DamID_T3_R6_Dam_only_B_LB_CGTCTAGTAA-TTAATCCAGC_S27_R1_001.fastq.gz
+  T3r21_Dam_B_LB:
+    - /shared/gcf/l.dauban/7019/fastq_files/7019_21_pA-DamID_T3_R21_Dam_only_B_LB_CTGGAGAATA-TCCATACAAC_S22_R1_001.fastq.gz
+  T3_LaminB1_B:
+    - /shared/gcf/l.dauban/7019/fastq_files/7019_28_pA-DamID_T3_LaminB1_B_ACTGGCAAGA-TGTTGTCCAT_S29_R1_001.fastq.gz
+  T3r6_LaminB1_B:
+    - /shared/gcf/l.dauban/7019/fastq_files/7019_29_pA-DamID_T3_R6_LaminB1_B_TCTTAGGTGG-GATCACTGGT_S38_R1_001.fastq.gz
+  T3r21_LaminB1_B:
+    - /shared/gcf/l.dauban/7019/fastq_files/7019_30_pA-DamID_T3_R21_LaminB1_B_TGACAAGAGG-AATCTGTTGG_S39_R1_001.fastq.gz
+  T3_deep_Dam_A_LB:
+    - /shared/gcf/l.dauban/7384/NOVA193_fastq_files/7384_17_T3_Dam_A_CAACCATACA-ACCGGTTATA_S6_R1_001.fastq.gz
+  T3r6_deep_Dam_A_LB:
+    - /shared/gcf/l.dauban/7384/NOVA193_fastq_files/7384_18_T3r6_Dam_A_ACCTTCGGAC-GACCGTAGAT_S20_R1_001.fastq.gz
+  T3r21_deep_Dam_A_LB:
+    - /shared/gcf/l.dauban/7384/NOVA193_fastq_files/7384_19_T3r21_Dam_A_TTCTACCGGC-TACTCGTAAG_S10_R1_001.fastq.gz
+  T3_deep_LaminB1_A:
+    - /shared/gcf/l.dauban/7384/NOVA193_fastq_files/7384_20_T3_LaminB1_A_GTAGGCCGTT-GCCACTGTCT_S21_R1_001.fastq.gz
+  T3r6_deep_LaminB1_A:
+    - /shared/gcf/l.dauban/7384/NOVA193_fastq_files/7384_21_T3r6_LaminB1_A_TATCATGTCG-TAATCTGCAC_S22_R1_001.fastq.gz
+  T3r21_deep_LaminB1_A:
+    - /shared/gcf/l.dauban/7384/NOVA193_fastq_files/7384_22_T3r21_LaminB1_A_GTGAGAGTAT-ATCTGTGAGG_S15_R1_001.fastq.gz
+  T3_deep_Dam_B_LB:
+    - /shared/gcf/l.dauban/7384/NOVA193_fastq_files/7384_23_T3_Dam_B_CGGATTGATC-AGTCACAACA_S23_R1_001.fastq.gz
+  T3r6_deep_Dam_B_LB:
+    - /shared/gcf/l.dauban/7384/NOVA193_fastq_files/7384_24_T3r6_Dam_B_CGTCTAGTAA-TTAATCCAGC_S24_R1_001.fastq.gz
+  T3r21_deep_Dam_B_LB:
+    - /shared/gcf/l.dauban/7384/NOVA193_fastq_files/7384_25_T3r21_Dam_B_CTGGAGAATA-TCCATACAAC_S25_R1_001.fastq.gz
+  T3_deep_LaminB1_B:
+    - /shared/gcf/l.dauban/7384/NOVA193_fastq_files/7384_26_T3_LaminB1_B_ACTGGCAAGA-TGTTGTCCAT_S26_R1_001.fastq.gz
+  T3r6_deep_LaminB1_B:
+    - /shared/gcf/l.dauban/7384/NOVA193_fastq_files/7384_27_T3r6_LaminB1_B_TCTTAGGTGG-GATCACTGGT_S27_R1_001.fastq.gz
+  T3r21_deep_LaminB1_B:
+    - /shared/gcf/l.dauban/7384/NOVA193_fastq_files/7384_28_T3r21_LaminB1_B_TGACAAGAGG-AATCTGTTGG_S28_R1_001.fastq.gz
+
+
+
+
+# pA-DamID, LaminB1, LAD1 inversion, i8
+  T201h51_rep1_Dam_only_LB1:
+    - /shared/gcf/m.martinez.ara/7122/NOVA131_fastq_files/7122_1_LD-1_TTAAGTGCGT-ACCTGTCGCT_S2_R1_001.fastq.gz
+  T201h51_rep1_LB1:
+    - /shared/gcf/m.martinez.ara/7122/NOVA131_fastq_files/7122_2_LD-2_TCGGAGACCT-AAGGTTACTC_S5_R1_001.fastq.gz
+  T201h51r58_rep1_Dam_only_LB1:
+    - /shared/gcf/m.martinez.ara/7122/NOVA131_fastq_files/7122_3_LD-3_TCCAGCGAAG-GTTCTATGTC_S4_R1_001.fastq.gz
+  T201h51r58_rep1_LB1:
+    - /shared/gcf/m.martinez.ara/7122/NOVA131_fastq_files/7122_4_LD-4_GTACTAAGAG-CGCTCTAGAT_S8_R1_001.fastq.gz
+  T201h51r62_rep1_Dam_only_LB1:
+    - /shared/gcf/m.martinez.ara/7122/NOVA131_fastq_files/7122_5_LD-5_GTCTTCTCGA-TGGTGCCAAC_S9_R1_001.fastq.gz
+  T201h51r62_rep1_LB1:
+    - /shared/gcf/m.martinez.ara/7122/NOVA131_fastq_files/7122_6_LD-6_ATACACAGAG-AGTCAGAAGG_S7_R1_001.fastq.gz
+  T201h51_rep2_Dam_only_LB1:
+    - /shared/gcf/m.martinez.ara/7122/NOVA131_fastq_files/7122_7_LD-7_AGGTCTATGG-CCGTGAGAAC_S12_R1_001.fastq.gz
+  T201h51_rep2_LB1:
+    - /shared/gcf/m.martinez.ara/7122/NOVA131_fastq_files/7122_8_LD-8_ACCTCATTGA-TATCCGATCT_S13_R1_001.fastq.gz
+  T201h51r58_rep2_Dam_only_LB1:
+    - /shared/gcf/m.martinez.ara/7122/NOVA131_fastq_files/7122_9_LD-9_CGTGGCAGAA-TCTTCCGATG_S14_R1_001.fastq.gz
+  T201h51r58_rep2_LB1:
+    - /shared/gcf/m.martinez.ara/7122/NOVA131_fastq_files/7122_10_LD-10_CAACAGGTAG-GACGATAGTG_S11_R1_001.fastq.gz
+  T201h51r62_rep2_Dam_only_LB1:
+    - /shared/gcf/m.martinez.ara/7122/NOVA131_fastq_files/7122_11_LD-11_TGATTCCACA-CTCTAGCCGT_S17_R1_001.fastq.gz
+  T201h51r62_rep2_LB1:
+    - /shared/gcf/m.martinez.ara/7122/NOVA131_fastq_files/7122_12_LD-12_TAAGGCGATC-GTTAGCACAA_S18_R1_001.fastq.gz
+
+
+
+
+# pA-DamID, H3K9me3, LAD1 inversion, i7
+  T201h49_Dam_A_k9me3:
+    - /shared/gcf/l.dauban/7037/fastq_files/7037_38_T201_H49_Dam_only_A_k9me3_AATCGAACTC-ACGAACCTTA_S51_R1_001.fastq.gz
+  T201h49r7_Dam_A_k9me3:
+    - /shared/gcf/l.dauban/7037/fastq_files/7037_39_T201_H49_R7_Dam_only_A_k9me3_CATTGAGCTA-ACTTCACATC_S53_R1_001.fastq.gz
+  T201h49r12_Dam_A_k9me3:
+    - /shared/gcf/l.dauban/7037/fastq_files/7037_40_T201_H49_R12_Dam_only_A_k9me3_GCTACAGGTC-TTATGCAGGA_S52_R1_001.fastq.gz
+  T201h49_H3K9me3_A:
+    - /shared/gcf/l.dauban/7037/fastq_files/7037_47_T201_H49_H3k9me3_A_AGGCTGGAGA-CAACTGTCAT_S6_R1_001.fastq.gz
+  T201h49r7_H3K9me3_A:
+    - /shared/gcf/l.dauban/7037/fastq_files/7037_48_T201_H49_R7_H3k9me3_A_CTTCGGAATC-CGTCGGTAAG_S57_R1_001.fastq.gz
+  T201h49r12_H3K9me3_A:
+    - /shared/gcf/l.dauban/7037/fastq_files/7037_49_T201_H49_R12_H3k9me3_A_GCCAAGTAAC-TGCGTGATGA_S10_R1_001.fastq.gz
+  T201h49_Dam_B_k9me3:
+    - /shared/gcf/l.dauban/7037/fastq_files/7037_56_T201_H49_Dam_only_B_k9me3_TAAGCCACGC-TTACGAACGA_S63_R1_001.fastq.gz
+  T201h49r7_Dam_B_k9me3:
+    - /shared/gcf/l.dauban/7037/fastq_files/7037_57_T201_H49_R7_Dam_only_B_k9me3_AACCACACTA-CCTCTGCTGA_S64_R1_001.fastq.gz
+  T201h49r12_Dam_B_k9me3:
+    - /shared/gcf/l.dauban/7037/fastq_files/7037_58_T201_H49_R12_Dam_only_B_k9me3_TTGTGAAGGC-TCGTCAGTAC_S28_R1_001.fastq.gz
+  T201h49_H3K9me3_B:
+    - /shared/gcf/l.dauban/7037/fastq_files/7037_65_T201_H49_H3k9me3_B_TCAATCAGAG-GACTCTGGTT_S66_R1_001.fastq.gz
+  T201h49r7_H3K9me3_B:
+    - /shared/gcf/l.dauban/7037/fastq_files/7037_66_T201_H49_R7_H3k9me3_B_GTACAGCGGA-CAATCTGTGT_S73_R1_001.fastq.gz
+  T201h49r12_H3K9me3_B:
+    - /shared/gcf/l.dauban/7037/fastq_files/7037_67_T201_H49_R12_H3k9me3_B_GTCGACTCCT-TGCCGTTAGC_S45_R1_001.fastq.gz
+
+
+
+
+# pA-DamID, H3K9me3, d3, d6
+  T48h20_rep1_Dam_k9me3:
+    - /shared/gcf/l.dauban/7072/NOVA122_fastq_files/7072_35_T48h20_rep1_Dam_k9me3_ACTTCAACAG-GCGTGAGCAT_S44_R1_001.fastq.gz
+  T48h20r16_rep1_Dam_k9me3:
+    - /shared/gcf/l.dauban/7072/NOVA122_fastq_files/7072_36_T48h20r16_rep1_Dam_k9me3_TGGACAATAG-GAGTCCTGTG_S37_R1_001.fastq.gz
+  T201h65_rep1_Dam_k9me3:
+    - /shared/gcf/l.dauban/7072/NOVA122_fastq_files/7072_37_T201h65_rep1_Dam_k9me3_TCACACGGAT-CTTCTGATCG_S47_R1_001.fastq.gz
+  T201h65r21_rep1_Dam_k9me3:
+    - /shared/gcf/l.dauban/7072/NOVA122_fastq_files/7072_38_T201h65r21_rep1_Dam_k9me3_AGGATACGGT-AACCACGTCA_S51_R1_001.fastq.gz
+  T48h20_rep1_H3K9me3:
+    - /shared/gcf/l.dauban/7072/NOVA122_fastq_files/7072_43_T48h20_rep1_H3K9me3_CTGAGCTTGT-CTTCTTGCGT_S49_R1_001.fastq.gz
+  T48h20r16_rep1_H3K9me3:
+    - /shared/gcf/l.dauban/7072/NOVA122_fastq_files/7072_44_T48h20r16_rep1_H3K9me3_CCTCTGTCAT-CGTATCGATT_S48_R1_001.fastq.gz
+  T201h65_rep1_H3K9me3:
+    - /shared/gcf/l.dauban/7072/NOVA122_fastq_files/7072_45_T201h65_rep1_H3K9me3_GCAGATGTAA-TACACGCCTC_S46_R1_001.fastq.gz
+  T201h65r21_rep1_H3K9me3:
+    - /shared/gcf/l.dauban/7072/NOVA122_fastq_files/7072_46_T201h65r21_rep1_H3K9me3_CTCATCATCT-TAAGCCTCTA_S57_R1_001.fastq.gz
+  T48h20_rep2_Dam_k9me3:
+    - /shared/gcf/l.dauban/7072/NOVA122_fastq_files/7072_49_T48h20_rep2_Dam_k9me3_CCACGATAAC-CATGCCTGAC_S3_R1_001.fastq.gz
+  T48h20r16_rep2_Dam_k9me3:
+    - /shared/gcf/l.dauban/7072/NOVA122_fastq_files/7072_50_T48h20r16_rep2_Dam_k9me3_CTTGCGAAGA-AATGACGCGG_S6_R1_001.fastq.gz
+  T201h65_rep2_Dam_k9me3:
+    - /shared/gcf/l.dauban/7072/NOVA122_fastq_files/7072_51_T201h65_rep2_Dam_k9me3_TGGCACGAAC-CCTGACTCTT_S60_R1_001.fastq.gz
+  T201h65r21_rep2_Dam_k9me3:
+    - /shared/gcf/l.dauban/7072/NOVA122_fastq_files/7072_52_T201h65r21_rep2_Dam_k9me3_AACGACATCT-GTCTTGGAAT_S10_R1_001.fastq.gz
+  T48h20_rep2_H3K9me3:
+    - /shared/gcf/l.dauban/7072/NOVA122_fastq_files/7072_57_T48h20_rep2_H3K9me3_AGTCGACGTA-CCATGGAACA_S64_R1_001.fastq.gz
+  T48h20r16_rep2_H3K9me3:
+    - /shared/gcf/l.dauban/7072/NOVA122_fastq_files/7072_58_T48h20r16_rep2_H3K9me3_TTCGTTCACA-CTGATTAGTG_S21_R1_001.fastq.gz
+  T201h65_rep2_H3K9me3:
+    - /shared/gcf/l.dauban/7072/NOVA122_fastq_files/7072_59_T201h65_rep2_H3K9me3_GACAATGCGG-TTGTTGAGTG_S65_R1_001.fastq.gz
+  T201h65r21_rep2_H3K9me3:
+    - /shared/gcf/l.dauban/7072/NOVA122_fastq_files/7072_60_T201h65r21_rep2_H3K9me3_AAGTGGCATT-AGAACAATCG_S62_R1_001.fastq.gz
+
+
+
+
+# pA-DamID, H3K9me3, i10, i12
+  T3h153_rep1_Dam_tripl:
+    - /shared/gcf/l.dauban/7072/NOVA122_fastq_files/7072_63_T3h153_rep1_Dam_tripl_CACACTGTTG-TGCATTGGTT_S69_R1_001.fastq.gz
+  T3h153r10_rep1_Dam_tripl:
+    - /shared/gcf/l.dauban/7072/NOVA122_fastq_files/7072_64_T3h153r10_rep1_Dam_tripl_CTCATTCTGC-TTGAAGCGGT_S70_R1_001.fastq.gz
+  T48h81_rep1_Dam_tripl:
+    - /shared/gcf/l.dauban/7072/NOVA122_fastq_files/7072_65_T48h81_rep1_Dam_tripl_AACAGTGACT-ATCGCAGTGT_S36_R1_001.fastq.gz
+  T48h81r18_rep1_Dam_tripl:
+    - /shared/gcf/l.dauban/7072/NOVA122_fastq_files/7072_66_T48h81r18_rep1_Dam_tripl_CCACTTGGAT-AATCTCGGTT_S67_R1_001.fastq.gz
+  T3h153_rep2_Dam_tripl:
+    - /shared/gcf/l.dauban/7072/NOVA122_fastq_files/7072_67_T3h153_rep2_Dam_tripl_TCAGACTGGT-TCGATTACGC_S73_R1_001.fastq.gz
+  T3h153r10_rep2_Dam_tripl:
+    - /shared/gcf/l.dauban/7072/NOVA122_fastq_files/7072_68_T3h153r10_rep2_Dam_tripl_GCATAGCCAA-TGGTTCCTGG_S74_R1_001.fastq.gz
+  T48h81_rep2_Dam_tripl:
+    - /shared/gcf/l.dauban/7072/NOVA122_fastq_files/7072_69_T48h81_rep2_Dam_tripl_ACGTGCATCG-CAGTCAGTTG_S75_R1_001.fastq.gz
+  T48h81r18_rep2_Dam_tripl:
+    - /shared/gcf/l.dauban/7072/NOVA122_fastq_files/7072_70_T48h81r18_rep2_Dam_tripl_GCGATGCAGA-TCTTCGTGTA_S45_R1_001.fastq.gz
+  T3h153_rep1_H3K9me3:
+    - /shared/gcf/l.dauban/7072/NOVA122_fastq_files/7072_79_T3h153_rep1_H3K9me3_TTAAGTGCGT-ACCTGTCGCT_S83_R1_001.fastq.gz
+  T3h153r10_rep1_H3K9me3:
+    - /shared/gcf/l.dauban/7072/NOVA122_fastq_files/7072_80_T3h153r10_rep1_H3K9me3_TCGGAGACCT-AAGGTTACTC_S66_R1_001.fastq.gz
+  T48h81_rep1_H3K9me3:
+    - /shared/gcf/l.dauban/7072/NOVA122_fastq_files/7072_81_T48h81_rep1_H3K9me3_TCCAGCGAAG-GTTCTATGTC_S82_R1_001.fastq.gz
+  T48h81r18_rep1_H3K9me3:
+    - /shared/gcf/l.dauban/7072/NOVA122_fastq_files/7072_82_T48h81r18_rep1_H3K9me3_GTACTAAGAG-CGCTCTAGAT_S85_R1_001.fastq.gz
+  T3h153_rep2_H3K9me3:
+    - /shared/gcf/l.dauban/7072/NOVA122_fastq_files/7072_83_T3h153_rep2_H3K9me3_GTCTTCTCGA-TGGTGCCAAC_S71_R1_001.fastq.gz
+  T3h153r10_rep2_H3K9me3:
+    - /shared/gcf/l.dauban/7072/NOVA122_fastq_files/7072_84_T3h153r10_rep2_H3K9me3_ATACACAGAG-AGTCAGAAGG_S86_R1_001.fastq.gz
+  T48h81_rep2_H3K9me3:
+    - /shared/gcf/l.dauban/7072/NOVA122_fastq_files/7072_85_T48h81_rep2_H3K9me3_AGGTCTATGG-CCGTGAGAAC_S76_R1_001.fastq.gz
+  T48h81r18_rep2_H3K9me3:
+    - /shared/gcf/l.dauban/7072/NOVA122_fastq_files/7072_86_T48h81r18_rep2_H3K9me3_ACCTCATTGA-TATCCGATCT_S87_R1_001.fastq.gz
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Bam control list, using basenames only
+dam_controls:
+
+# pA-DamID, LaminB1, deletion series
+  WT_1_LB1: WT_1_Dam
+  T201_1_LB1: T201_1_Dam
+  T201_r20_1_LB1: T201_r20_1_Dam
+  T48h20_1_LB1: T48h20_1_Dam
+  T201h24_1_LB1: T201h24_1_Dam
+  T201h44_1_LB1: T201h44_1_Dam
+  T201h65_1_LB1: T201h65_1_Dam
+  T201h179_1_LB1: T201h179_1_Dam
+  T48h20r8_1_LB1: T48h20r8_1_Dam
+  T48h20r16_1_LB1: T48h20r16_1_Dam
+  T201h24r2_1_LB1: T201h24r2_1_Dam
+  T201h44r3_1_LB1: T201h44r3_1_Dam
+  T201h44r14_1_LB1: T201h44r14_1_Dam
+  T201h65r12_1_LB1: T201h65r12_1_Dam
+  T201h65r21_1_LB1: T201h65r21_1_Dam
+  T201h162r6_1_LB1: T201h162r6_1_Dam
+  T201h179r28_1_LB1: T201h179r28_1_Dam
+  T201h179r29_1_LB1: T201h179r29_1_Dam
+  WT_2_LB1: WT_2_Dam
+  T201_2_LB1: T201_2_Dam
+  T201_r20_2_LB1: T201_r20_2_Dam
+  T48h20_2_LB1: T48h20_2_Dam
+  T201h24_2_LB1: T201h24_2_Dam
+  T201h44_2_LB1: T201h44_2_Dam
+  T201h65_2_LB1: T201h65_2_Dam
+  T201h162_2_LB1: T201h162_2_Dam
+  T201h179_2_LB1: T201h179_2_Dam
+  T48h20r8_2_LB1: T48h20r8_2_Dam
+  T48h20r16_2_LB1: T48h20r16_2_Dam
+  T201h24r2_2_LB1: T201h24r2_2_Dam
+  T201h24r11_2_LB1: T201h24r11_2_Dam
+  T201h44r3_2_LB1: T201h44r3_2_Dam
+  T201h44r14_2_LB1: T201h44r14_2_Dam
+  T201h65r12_2_LB1: T201h65r12_2_Dam
+  T201h65r21_2_LB1: T201h65r21_2_Dam
+  T201h162r1_2_LB1: T201h162r1_2_Dam
+  T201h162r6_2_LB1: T201h162r6_2_Dam
+  T201h179r28_2_LB1: T201h179r28_2_Dam
+  T201h179r29_2_LB1: T201h179r29_2_Dam
+
+
+
+
+# pA-DamID, LaminB1, LAD2 inversions i10 and i12
+  T3h153_1_LB1: T3h153_1_Dam
+  T48h81_1_LB1: T48h81_1_Dam
+  T3h153r2_1_LB1: T3h153r2_1_Dam
+  T3h153r10_1_LB1: T3h153r10_1_Dam
+  T48h81r18_1_LB1: T48h81r18_1_Dam
+  T48h81r33_1_LB1: T48h81r33_1_Dam
+  T3h153_2_LB1: T3h153_2_Dam
+  T48h81_2_LB1: T48h81_2_Dam
+  T3h153r2_2_LB1: T3h153r2_2_Dam
+  T3h153r10_2_LB1: T3h153r10_2_Dam
+  T48h81r18_2_LB1: T48h81r18_2_Dam
+  T48h81r33_2_LB1: T48h81r33_2_Dam
+
+
+
+
+# pA-DamID, LaminB1, LAD1 inversions i7 and i9
+  T201h49_LaminB1_A: T201h49_Dam_A_LB
+  T201h49r7_LaminB1_A: T201h49r7_Dam_A_LB
+  T201h49r12_LaminB1_A: T201h49r12_Dam_A_LB
+  T201h143_LaminB1_A: T201h143_Dam_A_LB
+  T201h143r12_LaminB1_A: T201h143r12_Dam_A_LB
+  T201h143r14_LaminB1_A: T201h143r14_Dam_A_LB
+  T201h49_LaminB1_B: T201h49_Dam_B_LB
+  T201h49r7_LaminB1_B: T201h49r7_Dam_B_LB
+  T201h49r12_LaminB1_B: T201h49r12_Dam_B_LB
+  T201h143_LaminB1_B: T201h143_Dam_B_LB
+  T201h143r12_LaminB1_B: T201h143r12_Dam_B_LB
+  T201h143r14_LaminB1_B: T201h143r14_Dam_B_LB
+  T201h49_deep_LaminB1_A: T201h49_deep_Dam_A_LB
+  T201h49r7_deep_LaminB1_A: T201h49r7_deep_Dam_A_LB
+  T201h49r12_deep_LaminB1_A: T201h49r12_deep_Dam_A_LB
+  T201h143_deep_LaminB1_A: T201h143_deep_Dam_A_LB
+  T201h143r12_deep_LaminB1_A: T201h143r12_deep_Dam_A_LB
+  T201h143r14_deep_LaminB1_A: T201h143r14_deep_Dam_A_LB
+  T201h49_deep_LaminB1_B: T201h49_deep_Dam_B_LB
+  T201h49r7_deep_LaminB1_B: T201h49r7_deep_Dam_B_LB
+  T201h49r12_deep_LaminB1_B: T201h49r12_deep_Dam_B_LB
+  T201h143_deep_LaminB1_B: T201h143_deep_Dam_B_LB
+  T201h143r12_deep_LaminB1_B: T201h143r12_deep_Dam_B_LB
+  T201h143r14_deep_LaminB1_B: T201h143r14_deep_Dam_B_LB
+
+
+
+
+# pA-DamID, LaminB1, R4-5 and R2-3 isolation in an iLAD and close to LAD4
+  T201h51r58_WT1_1_LB1: T201h51r58_WT1_1_Dam
+  T201h143r12_1_LB1: T201h143r12_1_Dam
+  Pool4_cl81_1_LB1: Pool4_cl81_1_Dam
+  Pool7_cl84_1_LB1: Pool7_cl84_1_Dam
+  Pool7_cl127_1_LB1: Pool7_cl127_1_Dam
+  Pool8_cl58_1_LB1: Pool8_cl58_1_Dam
+  T201h51r58_WT1_2_LB1: T201h51r58_WT1_2_Dam
+  T201h143r12_2_LB1: T201h143r12_2_Dam
+  Pool4_cl81_2_LB1: Pool4_cl81_2_Dam
+  Pool7_cl84_2_LB1: Pool7_cl84_2_Dam
+  Pool7_cl127_2_LB1: Pool7_cl127_2_Dam
+  Pool8_cl58_2_LB1: Pool8_cl58_2_Dam
+  T201h51r58_WT2_1_LB1: T201h51r58_WT2_1_Dam
+  Pool3_cl70_1_LB1: Pool3_cl70_1_Dam
+  Pool3_cl83_1_LB1: Pool3_cl83_1_Dam
+  T201h51r58_WT2_2_LB1: T201h51r58_WT2_2_Dam
+  Pool3_cl70_2_LB1: Pool3_cl70_2_Dam
+  Pool3_cl83_2_LB1: Pool3_cl83_2_Dam
+  T201h51r58_WT1_deep_1_LB1: T201h51r58_WT1_deep_1_Dam
+  T201h143r12_deep_1_LB1: T201h143r12_deep_1_Dam
+  Pool4_cl81_deep_1_LB1: Pool4_cl81_deep_1_Dam
+  Pool7_cl84_deep_1_LB1: Pool7_cl84_deep_1_Dam
+  Pool7_cl127_deep_1_LB1: Pool7_cl127_deep_1_Dam
+  Pool8_cl58_deep_1_LB1: Pool8_cl58_deep_1_Dam
+  T201h51r58_WT1_deep_2_LB1: T201h51r58_WT1_deep_2_Dam
+  T201h143r12_deep_2_LB1: T201h143r12_deep_2_Dam
+  Pool4_cl81_deep_2_LB1: Pool4_cl81_deep_2_Dam
+  Pool7_cl84_deep_2_LB1: Pool7_cl84_deep_2_Dam
+  Pool7_cl127_deep_2_LB1: Pool7_cl127_deep_2_Dam
+  Pool8_cl58_deep_2_LB1: Pool8_cl58_deep_2_Dam
+  T201h51r58_WT2_deep_1_LB1: T201h51r58_WT2_deep_1_Dam
+  Pool3_cl70_deep_1_LB1: Pool3_cl70_deep_1_Dam
+  Pool3_cl83_deep_1_LB1: Pool3_cl83_deep_1_Dam
+  T201h51r58_WT2_deep_2_LB1: T201h51r58_WT2_deep_2_Dam
+  Pool3_cl70_deep_2_LB1: Pool3_cl70_deep_2_Dam
+  Pool3_cl83_deep_2_LB1: Pool3_cl83_deep_2_Dam
+
+
+
+
+# pA-DamID, LaminB1, R4-5 CRISPR deletion
+  WT_rep1_LB1: WT_rep1_Dam
+  II_cl92_rep1_LB1: II_cl92_rep1_Dam
+  II_cl165_rep1_LB1: II_cl165_rep1_Dam
+  WT_rep2_LB1: WT_rep2_Dam
+  II_cl92_rep2_LB1: II_cl92_rep2_Dam
+  II_cl165_rep2_LB1: II_cl165_rep2_Dam
+
+
+
+
+ # pA-DamID, LaminB1, LAD2 deletion, d11
+  T3_LaminB1_A: T3_Dam_A_LB
+  T3r6_LaminB1_A: T3r6_Dam_A_LB
+  T3r21_LaminB1_A: T3r21_Dam_A_LB
+  T3_LaminB1_B: T3_Dam_B_LB
+  T3r6_LaminB1_B: T3r6_Dam_B_LB
+  T3r21_LaminB1_B: T3r21_Dam_B_LB
+  T3_deep_LaminB1_A: T3_deep_Dam_A_LB
+  T3r6_deep_LaminB1_A: T3r6_deep_Dam_A_LB
+  T3r21_deep_LaminB1_A: T3r21_deep_Dam_A_LB
+  T3_deep_LaminB1_B: T3_deep_Dam_B_LB
+  T3r6_deep_LaminB1_B: T3r6_deep_Dam_B_LB
+  T3r21_deep_LaminB1_B: T3r21_deep_Dam_B_LB
+
+
+
+
+# pA-DamID, LaminB1, LAD1 inversion, i8
+  T201h51_rep1_LB1: T201h51_rep1_Dam_only_LB1
+  T201h51r58_rep1_LB1: T201h51r58_rep1_Dam_only_LB1
+  T201h51r62_rep1_LB1: T201h51r62_rep1_Dam_only_LB1
+  T201h51_rep2_LB1: T201h51_rep2_Dam_only_LB1
+  T201h51r58_rep2_LB1: T201h51r58_rep2_Dam_only_LB1
+  T201h51r62_rep2_LB1: T201h51r62_rep2_Dam_only_LB1
+
+
+
+
+
+# pA-DamID, H3K9me3, LAD1 inversion, i7
+  T201h49_H3K9me3_A: T201h49_Dam_A_k9me3
+  T201h49r7_H3K9me3_A: T201h49r7_Dam_A_k9me3
+  T201h49r12_H3K9me3_A: T201h49r12_Dam_A_k9me3
+  T201h49_H3K9me3_B: T201h49_Dam_B_k9me3
+  T201h49r7_H3K9me3_B: T201h49r7_Dam_B_k9me3
+  T201h49r12_H3K9me3_B: T201h49r12_Dam_B_k9me3
+
+
+
+
+# pA-DamID, H3K9me3, d3, d6
+  T48h20_rep1_H3K9me3: T48h20_rep1_Dam_k9me3
+  T48h20r16_rep1_H3K9me3: T48h20r16_rep1_Dam_k9me3
+  T201h65_rep1_H3K9me3: T201h65_rep1_Dam_k9me3
+  T201h65r21_rep1_H3K9me3: T201h65r21_rep1_Dam_k9me3
+  T48h20_rep2_H3K9me3: T48h20_rep2_Dam_k9me3
+  T48h20r16_rep2_H3K9me3: T48h20r16_rep2_Dam_k9me3
+  T201h65_rep2_H3K9me3: T201h65_rep2_Dam_k9me3
+  T201h65r21_rep2_H3K9me3: T201h65r21_rep2_Dam_k9me3
+
+
+
+
+# pA-DamID, H3K9me3, i10, i12
+  T3h153_rep1_H3K9me3: T3h153_rep1_Dam_tripl
+  T3h153r10_rep1_H3K9me3: T3h153r10_rep1_Dam_tripl
+  T48h81_rep1_H3K9me3: T48h81_rep1_Dam_tripl
+  T48h81r18_rep1_H3K9me3: T48h81r18_rep1_Dam_tripl
+  T3h153_rep2_H3K9me3: T3h153_rep2_Dam_tripl
+  T3h153r10_rep2_H3K9me3: T3h153r10_rep2_Dam_tripl
+  T48h81_rep2_H3K9me3: T48h81_rep2_Dam_tripl
+  T48h81r18_rep2_H3K9me3: T48h81r18_rep2_Dam_tripl
+
+
+
+
+
+
+
+
+
+
+
+# Replicate experiments
+replicates:
+
+# pA-DamID, LaminB1, deletion series
+  WT_LB1:
+    - WT_1_LB1
+    - WT_2_LB1
+  T201_LB1:
+    - T201_1_LB1
+    - T201_2_LB1
+  T201_r20_LB1:
+    - T201_r20_1_LB1
+    - T201_r20_2_LB1
+  T48h20_LB1:
+    - T48h20_1_LB1
+    - T48h20_2_LB1
+  T201h24_LB1:
+    - T201h24_1_LB1
+    - T201h24_2_LB1
+  T201h44_LB1:
+    - T201h44_1_LB1
+    - T201h44_2_LB1
+  T201h65_LB1:
+    - T201h65_1_LB1
+    - T201h65_2_LB1
+  T201h179_LB1:
+    - T201h179_1_LB1
+    - T201h179_2_LB1
+  T48h20r8_LB1:
+    - T48h20r8_1_LB1
+    - T48h20r8_2_LB1
+  T48h20r16_LB1:
+    - T48h20r16_1_LB1
+    - T48h20r16_2_LB1
+  T201h24r2_LB1:
+    - T201h24r2_1_LB1
+    - T201h24r2_2_LB1
+  T201h44r3_LB1:
+    - T201h44r3_1_LB1
+    - T201h44r3_2_LB1
+  T201h44r14_LB1:
+    - T201h44r14_1_LB1
+    - T201h44r14_2_LB1
+  T201h65r12_LB1:
+    - T201h65r12_1_LB1
+    - T201h65r12_2_LB1
+  T201h65r21_LB1:
+    - T201h65r21_1_LB1
+    - T201h65r21_2_LB1
+  T201h162r6_LB1:
+    - T201h162r6_1_LB1
+    - T201h162r6_2_LB1
+  T201h179r28_LB1:
+    - T201h179r28_1_LB1
+    - T201h179r28_2_LB1
+  T201h179r29_LB1:
+    - T201h179r29_1_LB1
+    - T201h179r29_2_LB1
+
+
+
+
+# pA-DamID, LaminB1, LAD2 inversions i10 and i12
+  T3h153_LB1:
+    - T3h153_1_LB1
+    - T3h153_2_LB1
+  T48h81_LB1:
+    - T48h81_1_LB1
+    - T48h81_2_LB1
+  T3h153r2_LB1:
+    - T3h153r2_1_LB1
+    - T3h153r2_2_LB1
+  T3h153r10_LB1:
+    - T3h153r10_1_LB1
+    - T3h153r10_2_LB1
+  T48h81r18_LB1:
+    - T48h81r18_1_LB1
+    - T48h81r18_2_LB1
+  T48h81r33_LB1:
+    - T48h81r33_1_LB1
+    - T48h81r33_2_LB1
+
+
+
+
+# pA-DamID, LaminB1, LAD1 inversions i7 and i9
+  T201h49_LB1:
+    - T201h49_LaminB1_A
+    - T201h49_LaminB1_B
+    - T201h49_deep_LaminB1_A
+    - T201h49_deep_LaminB1_B
+  T201h49r7_LB1:
+    - T201h49r7_LaminB1_A
+    - T201h49r7_LaminB1_B
+    - T201h49r7_deep_LaminB1_A
+    - T201h49r7_deep_LaminB1_B
+  T201h49r12_LB1:
+    - T201h49r12_LaminB1_A
+    - T201h49r12_LaminB1_B
+    - T201h49r12_deep_LaminB1_A
+    - T201h49r12_deep_LaminB1_B
+  T201h143_LB1:
+    - T201h143_LaminB1_A
+    - T201h143_LaminB1_B
+    - T201h143_deep_LaminB1_A
+    - T201h143_deep_LaminB1_B
+  T201h143r12_LB1:
+    - T201h143r12_LaminB1_A
+    - T201h143r12_LaminB1_B
+    - T201h143r12_deep_LaminB1_A
+    - T201h143r12_deep_LaminB1_B
+  T201h143r14_LB1:
+    - T201h143r14_LaminB1_A
+    - T201h143r14_LaminB1_B
+    - T201h143r14_deep_LaminB1_A
+    - T201h143r14_deep_LaminB1_B
+
+
+
+
+# pA-DamID, LaminB1, R4-5 and R2-3 isolation in an iLAD and close to LAD4
+  T201h51r58_WT1_LB1:
+    - T201h51r58_WT1_deep_1_LB1
+    - T201h51r58_WT1_deep_2_LB1
+    - T201h51r58_WT1_1_LB1
+    - T201h51r58_WT1_2_LB1
+  T201h143r12_LB1:
+    - T201h143r12_deep_1_LB1
+    - T201h143r12_deep_2_LB1
+    - T201h143r12_1_LB1
+    - T201h143r12_2_LB1
+  Pool4_cl81_LB1:
+    - Pool4_cl81_deep_1_LB1
+    - Pool4_cl81_deep_2_LB1
+    - Pool4_cl81_1_LB1
+    - Pool4_cl81_2_LB1
+  Pool7_cl84_LB1:
+    - Pool7_cl84_deep_1_LB1
+    - Pool7_cl84_deep_2_LB1
+    - Pool7_cl84_1_LB1
+    - Pool7_cl84_2_LB1
+  Pool7_cl127_LB1:
+    - Pool7_cl127_deep_1_LB1
+    - Pool7_cl127_deep_2_LB1
+    - Pool7_cl127_1_LB1
+    - Pool7_cl127_2_LB1
+  Pool8_cl58_LB1:
+    - Pool8_cl58_deep_1_LB1
+    - Pool8_cl58_deep_2_LB1
+    - Pool8_cl58_1_LB1
+    - Pool8_cl58_2_LB1
+  T201h51r58_WT2_LB1:
+    - T201h51r58_WT2_deep_1_LB1
+    - T201h51r58_WT2_deep_2_LB1
+    - T201h51r58_WT2_1_LB1
+    - T201h51r58_WT2_2_LB1
+  Pool3_cl70_Dam:
+    - Pool3_cl70_deep_1_LB1
+    - Pool3_cl70_deep_2_LB1
+    - Pool3_cl70_1_LB1
+    - Pool3_cl70_2_LB1
+  Pool3_cl83_Dam:
+    - Pool3_cl83_deep_1_LB1
+    - Pool3_cl83_deep_2_LB1
+    - Pool3_cl83_1_LB1
+    - Pool3_cl83_2_LB1
+
+
+
+
+# pA-DamID, LaminB1, R4-5 CRISPR deletion
+  WT_LB1:
+    - WT_rep1_LB1
+    - WT_rep2_LB1
+  II_cl92_LB1:
+    - II_cl92_rep1_LB1
+    - II_cl92_rep2_LB1
+  II_cl165_LB1:
+    - II_cl165_rep1_LB1
+    - II_cl165_rep2_LB1
+
+
+
+
+ # pA-DamID, LaminB1, LAD2 deletion, d11
+  T3_LB1:
+    - T3_LaminB1_A
+    - T3_LaminB1_B
+    - T3_deep_LaminB1_A
+    - T3_deep_LaminB1_B
+  T3r6_LB1:
+    - T3r6_LaminB1_A
+    - T3r6_LaminB1_B
+    - T3r6_deep_LaminB1_A
+    - T3r6_deep_LaminB1_B
+  T3r21_LB1:
+    - T3r21_LaminB1_A
+    - T3r21_LaminB1_B
+    - T3r21_deep_LaminB1_A
+    - T3r21_deep_LaminB1_B
+
+
+
+
+# pA-DamID, LaminB1, LAD1 inversion, i8
+  T201h51_LB1:
+    - T201h51_rep1_LB1
+    - T201h51_rep2_LB1
+  T201h51r58_LB1:
+    - T201h51r58_rep1_LB1
+    - T201h51r58_rep2_LB1
+  T201h51r62_LB1:
+    - T201h51r62_rep1_LB1
+    - T201h51r62_rep2_LB1
+
+
+
+
+# pA-DamID, H3K9me3, LAD1 inversion, i7
+  T201h49_H3K9me3:
+    - T201h49_H3K9me3_A
+    - T201h49_H3K9me3_B
+  T201h49r7_H3K9me3:
+    - T201h49r7_H3K9me3_A
+    - T201h49r7_H3K9me3_B
+  T201h49r12_H3K9me3:
+    - T201h49r12_H3K9me3_A
+    - T201h49r12_H3K9me3_B
+
+
+
+
+# pA-DamID, H3K9me3, d3, d6
+  T48h20_H3K9me3:
+    - T48h20_rep1_H3K9me3
+    - T48h20_rep2_H3K9me3
+  T48h20r16_H3K9me3:
+    - T48h20r16_rep1_H3K9me3
+    - T48h20r16_rep2_H3K9me3
+  T201h65_H3K9me3:
+    - T201h65_rep1_H3K9me3
+    - T201h65_rep2_H3K9me3
+  T201h65r21_H3K9me3:
+    - T201h65r21_rep1_H3K9me3
+    - T201h65r21_rep2_H3K9me3
+
+
+
+
+# pA-DamID, H3K9me3, i10, i12
+  T3h153_H3K9me3:
+    - T3h153_rep1_H3K9me3
+    - T3h153_rep2_H3K9me3
+  T3h153r10_H3K9me3:
+    - T3h153r10_rep1_H3K9me3
+    - T3h153r10_rep2_H3K9me3
+  T48h81_H3K9me3:
+    - T48h81_rep1_H3K9me3
+    - T48h81_rep2_H3K9me3
+  T48h81r18_H3K9me3:
+    - T48h81r18_rep1_H3K9me3
+    - T48h81r18_rep2_H3K9me3
+
+
+
+
+
+

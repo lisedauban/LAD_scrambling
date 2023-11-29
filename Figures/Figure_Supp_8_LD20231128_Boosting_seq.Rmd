@@ -1,0 +1,359 @@
+---
+title: "Figure_Supp_8_LD20231128_Boosting_seq"
+date: "2023-11-28"
+output: 
+  html_document:
+    theme: journal #cerulean
+    highlight: monochrome
+    toc: true
+    toc_float: true
+    code_folding: show
+  editor_options:
+    chunk_output_type: console
+---
+
+Scripts for all figures in the paper.
+This is Figure Supp 8
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Load all libraries
+```{r}
+library(tidyverse)
+library(ggplot2)
+library(ggbeeswarm)
+library(ggsignif)
+library(seqinr)
+library(Biostrings)
+library(gtools)
+library(magrittr)
+library(dplyr)
+library(readr)
+library(stringr)
+library(tidyr)
+library(tibble)
+library(RColorBrewer)
+library(data.table)
+
+library(IRanges)
+library(GenomeInfoDb)
+library(GenomicRanges)
+library(rtracklayer)
+library(XVector)
+library(biostrext)
+
+library(rcartocolor)
+
+library(stringi)
+
+```
+
+
+# Figure Supp 8A - TF in Boosting regions
+```{r}
+# I used the sites_number files from "/DATA/usr/v.franceschini/Workspaces/2023_11_LISE_MOTIFS_IN_LBR/01_MOTIFSCAN_TOOL/02_OUTPUTS/vf231115_LBR_vs_R2-3_w0" and "/DATA/usr/v.franceschini/Workspaces/2023_11_LISE_MOTIFS_IN_LBR/01_MOTIFSCAN_TOOL/02_OUTPUTS/vf231115_R2-3_vs_LBR_w0" to create a table with both boosting regions and R2-3
+
+boosting_R23 <- read_table("/DATA/usr/l.dauban/projects/TF_motifs_in_boosting_regions/Boosting_regions_number.txt")
+
+boosting_R23 %>% select(chr, start, end, GAGA.1, YY1.1, ZBT7B, region) %>% mutate(region = factor(region, levels = c("R2-3", "R4-5", "LAD2"))) %>% gather(key = 'TF', value = 'number', -chr, -start, -end, -region) %>%
+  ggplot(aes(x = region, y = number)) +
+  geom_col(aes(fill = region), show.legend = "none") +
+  facet_wrap(~ TF, scales = "free") +
+  #geom_signif(test = "wilcox.test", test.args = list(alternative = c("two.sided")), comparisons = list(c("R2-3", "R4-5"), c("R2-3", "LAD2")), y_position = c(1, 3.5)) +
+  scale_fill_manual(values = c("#A6CEE2", "#1B899B", "#1B899B")) +
+  scale_y_continuous(expand = expansion(mult = c(0.15))) +
+  labs(y = "Number of TF binding site",
+       x = '') +
+  theme_bw()
+
+ggsave("FigS8A_LD20231128_TF_boosting.pdf", height = 3, width = 9)
+
+```
+
+
+# Figure Supp 8B - TFLAD vs iLAD
+```{r}
+# I used the sites_number files from "/DATA/usr/v.franceschini/Workspaces/2023_11_LISE_MOTIFS_IN_LBR/01_MOTIFSCAN_TOOL/02_OUTPUTS/vf231115_LAD_vs_iLAD_w0" and "/DATA/usr/v.franceschini/Workspaces/2023_11_LISE_MOTIFS_IN_LBR/01_MOTIFSCAN_TOOL/02_OUTPUTS/vf231115_iLAD_vs_LAD_w0" to create a table with LADs and iLADs
+
+LAD_iLAD <- read_table("/DATA/usr/l.dauban/projects/TF_motifs_in_boosting_regions/LAD_vs_iLAD.txt")
+
+LAD_iLAD.norm <- LAD_iLAD %>% mutate(size = end - start) %>% rowwise() %>% mutate(GAGA.1.norm = 1e6*GAGA.1/size,
+                                                                                  YY1.1.norm = 1e6*YY1.1/size,
+                                                                                  ZBT7B.norm = 1e6*ZBT7B/size) %>% select(chr, start, end, GAGA.1.norm, YY1.1.norm, ZBT7B.norm, region, size)
+
+LAD_iLAD.norm %>% mutate(region = factor(region, levels = c("LAD", "iLAD"))) %>% gather(key = 'TF', value = 'number', -chr, -start, -end, -region, -size) %>% mutate(TF = factor(TF, levels = c('ZBT7B.norm', 'GAGA.1.norm', 'YY1.1.norm'))) %>%
+  ggplot(aes(x = region, y = number)) +
+  geom_violin(aes(color = region), show.legend = "none") +
+  geom_beeswarm(aes(color = region), cex = 0.5, alpha = 0.1, priority ="random", size = 1, show.legend = "none") +
+  stat_summary(fun=median, geom="crossbar", width=0.5, size = 0.2, color = "black", show.legend = "none")+
+  facet_wrap(~ TF, scales = "free") +
+  geom_signif(test = "wilcox.test", test.args = list(alternative = c("two.sided")), comparisons = list(c("LAD", "iLAD"))) +
+  scale_y_continuous(expand = expansion(mult = c(0.15))) +
+  scale_color_manual(values = c("#A6CEE2", "#F4C374")) +
+  labs(y = "Number of TF binding site per region, per Mb",
+       x = '') +
+  theme_bw()
+
+
+ggsave("FigS8B_LD20231128_TF_LAD.pdf", height = 3, width = 9)
+
+```
+
+
+# Figure Supp 8C - repeats
+I use RepeatMasker to compute repeat counts in different regions:
+  - LAD1:
+    - R4-5: chr9:112440815-112637307                --> output5   -->   https://www.repeatmasker.org/tmp/e67986537844f20f82ddb1a6c6d108e6.html
+    - R2-3: chr9:112154177-112360112                --> output4   -->   https://www.repeatmasker.org/tmp/e0c974dd9194c792fbcf6ec52d7b8ff6.html
+    - Rest of the LAD: chr9:111560001-112440815     --> output3   -->   https://www.repeatmasker.org/tmp/cc06ad0f47e6b84ce272d4eb2149c400.html
+                       chr9:112637307-113640000     --> output6   -->   https://www.repeatmasker.org/tmp/d2dea2695471a35c82c7526f4f0e22ea.html
+    
+  - LAD2: 
+    - boosting region:  chr9:109627353-109769723    --> output2   -->    https://www.repeatmasker.org/tmp/8d01b9d7d70688f2078d0d2b155df90c.html
+    - Rest of the LAD: chr9:109420001-109627353     --> output1   -->    https://www.repeatmasker.org/tmp/03994bae47e6949035154b1f6547e857.html
+
+## Load and process data
+```{r}
+# regions of interest
+regions = tibble(seqnames = rep("chr9", 6), 
+                 start = c(112440815, 112154177, 111560001, 112637307, 109627353, 109420001), 
+                 end = c(112637307, 112360112, 112440815, 113640000, 109769723, 109627353),
+                 output = c("R4-5", "R2-3", "LAD1_up", "LAD1_down", "LAD2_boosting", "LAD2")) %>% rowwise() %>% mutate(width = end-start)
+
+
+# repeat data
+metadata <- dplyr::tibble(file = dir("/DATA/usr/l.dauban/projects/FIMO/LD20231121_LAD_ROI_repeats/RM2_all_outputs/", recursive = T, full.names = T))
+
+tib <- dplyr::bind_rows(lapply(
+  1:nrow(metadata),
+  function(i) {
+    tmp <- read.table(metadata$file[i], header = TRUE)
+  }
+))
+
+# Add extra column for the general class of repeat
+tib <- tib %>% 
+  dplyr::mutate(
+    class = case_when(
+      grepl("SINE", class.family) ~ "SINE",
+      grepl("DNA", class.family) ~ "DNA",
+      grepl("LINE", class.family) ~ "LINE",
+      grepl("LTR", class.family) ~ "LTR",
+      grepl("Satellite", class.family) ~ "Satellite",
+      T ~ class.family),
+    output = case_when(
+      grepl("3545_0", sequence) ~ "LAD2",
+      grepl("3545_1", sequence) ~ "LAD2_boosting",
+      grepl("3545_2", sequence) ~ "LAD1_up",
+      grepl("3545_3", sequence) ~ "R2-3",
+      grepl("3545_4", sequence) ~ "R4-5",
+      grepl("3545_5", sequence) ~ "LAD1_down")
+  ) 
+
+
+# count and normalize by Mb
+tib_count <- tib %>% group_by(output) %>% dplyr::count(class) 
+
+tib_count <- left_join(tib_count, regions, by = "output") %>% select(output, class, n, width) %>% rowwise() %>% mutate(n.norm = 1e6*n/width) %>% mutate(output = factor(output, levels = c("R4-5", "R2-3", "LAD1_up", "LAD1_down", "LAD2_boosting", "LAD2")))
+
+```
+
+## Plot
+```{r}
+# combine counts for LAD1_up and LAD1_down and normalize 
+tib_count_LAD1 <- tib_count %>% filter(output == "LAD1_down" | output == "LAD1_up") %>% group_by(class) %>% summarize(n = sum(n)) %>% mutate(output = "LAD1", width = regions[which(regions$output == "LAD1_up"),]$width + regions[which(regions$output == "LAD1_down"),]$width) %>% mutate(n.norm = 1e6*n/width)
+
+# combine with the rest of the data
+tib_count_comb <- tib_count  %>% filter(output == "R4-5" | output == "R2-3" | output == "LAD2_boosting" | output == "LAD2") %>% rbind(tib_count_LAD1) %>% as.data.frame() %>% mutate(output = as.character(output)) %>% mutate(output = factor(output, levels = c("R4-5", "R2-3", "LAD1", "LAD2_boosting", "LAD2")))
+
+# plot
+tib_count_comb %>% filter(output == "R4-5" | output == "LAD1"| output == "LAD2_boosting" | output == "LAD2") %>% 
+  ggplot(aes(x = output, y = n.norm, fill = class)) +
+  geom_col() +
+  labs(x = "",
+       y = "count/Mb") +
+  scale_fill_carto_d(palette = "Prism") +
+  theme_bw() +
+  theme(axis.text.x=element_text(angle = 45, hjust = 1))
+  
+ggsave("FigS8C_LD20231128_repeats.pdf", height = 4, width = 5)  
+
+```
+
+
+
+# Figure Supp 8D - repeats sub-fammilies
+## combine LAD1
+```{r}
+# same analysis but with the subclasses for each repeat
+tib_count_fam <- tib %>% group_by(output) %>% dplyr::count(class.family) 
+
+tib_count_fam <- tib_count_fam %>% 
+  dplyr::mutate(
+    class = case_when(
+      grepl("SINE", class.family) ~ "SINE",
+      grepl("DNA", class.family) ~ "DNA",
+      grepl("LINE", class.family) ~ "LINE",
+      grepl("LTR", class.family) ~ "LTR",
+      grepl("Satellite", class.family) ~ "Satellite",
+      T ~ class.family))
+
+tib_count_fam <- left_join(tib_count_fam, regions, by = "output") %>% select(output, class.family, n, width, class) %>% rowwise() %>% mutate(n.norm = 1e6*n/width) %>% mutate(output = factor(output, levels = c("R4-5", "R2-3", "LAD1_up", "LAD1_down", "LAD2_boosting", "LAD2")))
+
+
+# plot
+colors = c(
+  # DNA
+  rcartocolor::carto_pal(7, "Prism"), 
+  # LINE
+  rcartocolor::carto_pal(5, "Prism"), 
+  # LowCompl
+  rcartocolor::carto_pal(3, "Prism")[1], 
+  # KTR
+  rcartocolor::carto_pal(6, "Prism"), 
+  # RC
+  rcartocolor::carto_pal(3, "Prism")[1], 
+  # RETROP
+  rcartocolor::carto_pal(3, "Prism")[1], 
+  # rrNA
+  rcartocolor::carto_pal(3, "Prism")[1], 
+  # SAT
+  rcartocolor::carto_pal(3, "Prism")[1:2],
+  # SCRNA
+  rcartocolor::carto_pal(3, "Prism")[1], 
+  # SIMPL
+  rcartocolor::carto_pal(3, "Prism")[1], 
+  # SINE
+  rcartocolor::carto_pal(7, "Prism"), 
+  # SNRA
+ rcartocolor::carto_pal(3, "Prism")[1]
+)
+
+# combine counts for LAD1_up and LAD1_down and normalize 
+tib_count_fam_LAD1 <- tib_count_fam %>% filter(output == "LAD1_down" | output == "LAD1_up") %>% group_by(class.family) %>% summarize(n = sum(n)) %>% mutate(output = "LAD1", width = regions[which(regions$output == "LAD1_up"),]$width + regions[which(regions$output == "LAD1_down"),]$width) %>% mutate(n.norm = 1e6*n/width)
+
+tib_count_fam_LAD1 <- tib_count_fam_LAD1 %>% 
+  dplyr::mutate(
+    class = case_when(
+      grepl("SINE", class.family) ~ "SINE",
+      grepl("DNA", class.family) ~ "DNA",
+      grepl("LINE", class.family) ~ "LINE",
+      grepl("LTR", class.family) ~ "LTR",
+      grepl("Satellite", class.family) ~ "Satellite",
+      T ~ class.family))
+
+# combine with the rest of the data
+tib_count_fam_comb <- tib_count_fam %>% filter(output == "R4-5" | output == "R2-3" | output == "LAD2_boosting" | output == "LAD2") %>% rbind(tib_count_fam_LAD1) %>% as.data.frame() %>% mutate(output = as.character(output)) %>% mutate(output = factor(output, levels = c("R4-5", "R2-3", "LAD1", "LAD2_boosting", "LAD2")))
+
+# plot
+
+colors = c(
+  # DNA
+  rcartocolor::carto_pal(7, "Prism"), 
+  # LINE
+  rcartocolor::carto_pal(5, "Prism"), 
+  # LowCompl
+  rcartocolor::carto_pal(3, "Prism")[1], 
+  # KTR
+  rcartocolor::carto_pal(6, "Prism"), 
+  # RC
+  rcartocolor::carto_pal(3, "Prism")[1], 
+  # RETROP
+  rcartocolor::carto_pal(3, "Prism")[1], 
+  # rrNA
+  rcartocolor::carto_pal(3, "Prism")[1], 
+  # SAT
+  rcartocolor::carto_pal(3, "Prism")[1:2],
+  # SCRNA
+  rcartocolor::carto_pal(3, "Prism")[1], 
+  # SIMPL
+  rcartocolor::carto_pal(3, "Prism")[1], 
+  # SINE
+  rcartocolor::carto_pal(7, "Prism"), 
+  # SNRA
+ rcartocolor::carto_pal(3, "Prism")[1]
+)
+
+tib_count_fam_comb %>% filter(output == "R4-5" | output == "LAD1"| output == "LAD2_boosting" | output == "LAD2") %>% group_by(class) %>% mutate(dummy_var = as.character(x = factor(x = class.family, labels = seq_len(length.out = dplyr::n_distinct(class.family))))) %>% ungroup() %>%
+  ggplot(aes(x = output, y = n.norm, fill = class.family)) +
+  geom_col() +
+  labs(x = "",
+       y = "count/Mb") +
+  facet_wrap(~ class, scales = "free_y") +
+  #scale_fill_carto_d(palette = "Prism") +
+  scale_fill_manual(values=colors)+
+  theme_bw() +
+  theme(axis.text.x=element_text(angle = 45, hjust = 1))
+  
+
+ggsave("FigS8D_LD20231128_repeats_subfam.pdf", height = 8, width = 15)  
+
+```
+
+
+
+# Figure Supp 8E - AT content
+## Load data
+```{r}
+LAD2 <- DNAString(as.character(readDNAStringSet("/DATA/usr/l.dauban/projects/FIMO/LD20231121_LAD_ROI_repeats/output1")))
+LAD2.2 <- DNAString(as.character(readDNAStringSet("/DATA/usr/l.dauban/projects/FIMO/LD20231121_LAD_ROI_repeats/output2")))
+LAD1_up <- DNAString(as.character(readDNAStringSet("/DATA/usr/l.dauban/projects/FIMO/LD20231121_LAD_ROI_repeats/output3")))
+R23 <- DNAString(as.character(readDNAStringSet("/DATA/usr/l.dauban/projects/FIMO/LD20231121_LAD_ROI_repeats/output4")))
+R45 <- DNAString(as.character(readDNAStringSet("/DATA/usr/l.dauban/projects/FIMO/LD20231121_LAD_ROI_repeats/output5")))
+LAD1_down <- DNAString(as.character(readDNAStringSet("/DATA/usr/l.dauban/projects/FIMO/LD20231121_LAD_ROI_repeats/output6")))
+
+```
+
+## Plot
+I know that the HMM model does not predict the entire LAD2, two parts are missing. I want to redo the analysis on a more complete LAD2
+New coordinates: chr9:109210340-109627353   --> output7 (upstream)
+                 chr9:109768738-109820013   --> output8 (downstream)
+
+```{r}
+
+LAD2_comp <- DNAString(as.character(readDNAStringSet("/DATA/usr/l.dauban/projects/FIMO/LD20231121_LAD_ROI_repeats/output7")))
+LAD2_down <- DNAString(as.character(readDNAStringSet("/DATA/usr/l.dauban/projects/FIMO/LD20231121_LAD_ROI_repeats/output8")))
+
+
+
+# Calculate AT content
+list_AT_new <- lapply(list(R45, R23, c(LAD1_up, LAD1_down), LAD2.2, c(LAD2_comp, LAD2_down)), function(x) {100-calc_windowed_GC(x,500,250)})
+names(list_AT_new) <- c("R45", "R23", "LAD1", "LAD2.2", "LAD2_comp")
+
+# convert the list to data frame
+df_AT_1_new <- as.data.frame(stri_list2matrix(list_AT_new))
+names(df_AT_1_new) <- c("R45", "R23", "LAD1", "LAD2.2", "LAD2_comp")
+
+# convert to numeric
+df_AT_1_new <- mutate_all(df_AT_1_new, function(x) as.numeric(as.character(x)))
+
+
+# plot
+df_AT_1_new %>% gather(value = "AT", key = "output") %>% filter(output == "R45" | output == "LAD1" | output == "LAD2.2" | output == "LAD2_comp") %>% mutate(output = factor(output, levels = c("R45", "LAD1", "LAD2.2", "LAD2_comp"))) %>%
+  ggplot(aes(x=output, y=AT))+
+  geom_violin(aes(color = output), show.legend = "none") +
+  geom_beeswarm(aes(color = output), alpha = 0.3, cex = 0.12, priority ="random", show.legend = "none") +
+  geom_signif(test = "wilcox.test", test.args = list(alternative = c("two.sided")), comparisons = list(c("R45", "LAD1"), c("LAD2.2", "LAD2_comp")), y_position = c(77, 77)) +
+  stat_summary(fun=median, geom="crossbar", width=0.5, size = 0.3, color = "black", show.legend = "none")+
+  scale_color_manual(values = c("#1B899B", "#A6CEE2", "#1B899B", "#A6CEE2")) +
+  scale_y_continuous(expand = expansion(mult = c(0.08))) +
+  theme_bw()+
+  labs(x= '',
+       y= "percentage(A/T content)")+
+  theme(axis.text.x=element_text(angle = 45, hjust = 1))
+
+ggsave("FigS8E_LD20231128_ATcontent.pdf", height = 6, width = 7)
+
+```
+
+
+
+
+
+
+
+
+
