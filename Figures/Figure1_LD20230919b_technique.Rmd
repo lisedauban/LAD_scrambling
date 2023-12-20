@@ -335,10 +335,16 @@ ggsave("Fig1C_LD20230919b_Hopping_iLAD.pdf", height = 10, width = 20)
 nrow(Tdgf1.distance)
 
 # number of integrations within 2 Mb
-Tdgf1.distance %>% filter(distance<1e6)
+Tdgf1.distance %>% filter(distance<1e6 & distance>-1e6)
 
 # in the plotted window
-Tdgf1.distance_subset %>% filter(location > 109e6 & location < 114e6) %>% nrow()
+Tdgf1.distance_subset %>% nrow()
+
+# number of integrations within 2 Mb
+Tdgf1.distance_subset %>% filter(distance<1e6 & distance>-1e6)
+
+# number of integration in chr9
+Tdgf1.gr[which(seqnames(Tdgf1.gr) == "chr9")]
 
 ```
 
@@ -469,11 +475,14 @@ T201_distance_subset_ovl_integ <- findOverlaps(T201_distance_subset.gr, damid, s
 T201_distance_subset.gr$damid <- damid$score[T201_distance_subset_ovl_integ]
 T201_distance_subset.gr$LAD = ifelse(T201_distance_subset.gr$damid>0, "LAD", "iLAD")
 
-T201_distance_subset.gr %>% data.frame() %>% filter(LAD == "iLAD")
+T201_distance_subset.gr %>% data.frame() %>% filter(LAD == "LAD") %>% nrow()
+
+# number of integrations in iLAD in plotted window
+T201_distance_subset.gr %>% data.frame() %>% filter(start > 110.5e6 & start < 114.5e6) %>% filter(LAD == "iLAD") %>% nrow()
 
 
-# number of integrations within LAD2
-T201_distance_subset.gr %>% data.frame() %>% filter(seqnames == "chr9" & start>LAD_big$xmin*1e6 & start<LAD_big$xmax*1e6)
+# number of integrations within LAD1
+T201_distance_subset.gr %>% data.frame() %>% filter(seqnames == "chr9" & start>LAD_big$xmin*1e6 & start<LAD_big$xmax*1e6) %>% nrow()
 
 
 ```
@@ -585,8 +594,11 @@ gr_T48$LAD = ifelse(gr_T48$damid>0, "LAD", "iLAD")
 
 gr_T48 %>% data.frame() %>% filter(seqnames == "chr9") %>% filter(LAD == "iLAD")
 
+# number of integrations in iLAD in the plotted window
+gr_T48 %>% data.frame() %>% filter(seqnames == "chr9") %>% filter(start > 107.5e6 & start < 111.5e6) %>% filter(start<LAD_small$xmin*1e6 | start>LAD_small$xmax*1e6) %>% nrow()
+
 # number of integrations within LAD2
-gr_T48 %>% data.frame() %>% filter(seqnames == "chr9" & start>LAD_small$xmin*1e6 & start<LAD_small$xmax*1e6)
+gr_T48 %>% data.frame() %>% filter(seqnames == "chr9" & start>LAD_small$xmin*1e6 & start<LAD_small$xmax*1e6) %>% nrow()
 
 
 ```

@@ -164,7 +164,11 @@ Fzd5_ovl_integ <- findOverlaps(Fzd5.gr, damid, select = "arbitrary")
 Fzd5.gr$damid <- damid$score[Fzd5_ovl_integ]
 Fzd5.gr$LAD = ifelse(Fzd5.gr$damid>0, "LAD", "iLAD")
 
-Fzd5.gr %>% data.frame() %>% filter(seqnames == "chr1") %>% filter(LAD == "iLAD")
+Fzd5.gr %>% data.frame() %>% filter(seqnames == "chr1") %>% filter(LAD == "iLAD") %>% nrow()
+
+# number of integrations in iLAD in the plotted window
+Fzd5.gr %>% data.frame() %>% filter(seqnames == "chr1") %>% filter(start > 62.2e6 & start < 66.7e6) %>% filter(LAD == "iLAD") %>% nrow()
+
 
 ```
 
@@ -300,7 +304,11 @@ Nanog_ovl_integ <- findOverlaps(Nanog.gr, damid, select = "arbitrary")
 Nanog.gr$damid <- damid$score[Nanog_ovl_integ]
 Nanog.gr$LAD = ifelse(Nanog.gr$damid>0, "LAD", "iLAD")
 
-Nanog.gr %>% data.frame() %>% filter(seqnames == "chr6") %>% filter(LAD == "iLAD")
+Nanog.gr %>% data.frame() %>% filter(seqnames == "chr6") %>% filter(LAD == "iLAD") %>% nrow()
+
+# number of integrations in iLAD in the plotted window
+Nanog.gr %>% data.frame() %>% filter(seqnames == "chr6") %>% filter(start > 120.5e6 & start < 125e6) %>% filter(LAD == "iLAD") %>% nrow()
+
 
 
 ```

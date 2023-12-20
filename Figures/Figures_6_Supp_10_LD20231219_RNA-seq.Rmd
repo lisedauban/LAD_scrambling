@@ -13,7 +13,7 @@ output:
 ---
 
 Scripts for all figures in the paper.
-This is Figure 6
+This is Figure 6 and Figure Supp 10, for the RNA-seq part
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
@@ -1694,7 +1694,7 @@ RNA.damID.table.all.all <- RNA.damID.table.all %>% dplyr::select(-strand, -width
 
 RNA.damID.table.all.all %>% filter(start != 'NA' & K9me3_diff != 'NA') %>% filter(start != 'NA' & LB1_diff != 'NA') %>% select(Par, Par_tot, Par_corr, log2, LB1_diff, K9me3_diff, sample, allele, gene_name, pvalue, sig) %>% gather(key, value, -Par, -Par_tot, -Par_corr, -log2, -sample, -allele, -gene_name, -pvalue, -sig) %>% group_by(gene_name) %>% filter(Par_corr > 5) %>% filter(allele == "CAST") %>%
   ggplot() +
-  geom_point(aes(x=value, y=log2, color = log10(Par/Par_tot * 1e6), label = paste(gene_name,",",sample), stroke = 0, size = -log2(pvalue))) +
+  geom_point(aes(x=value, y=log2, color = log10(Par/Par_tot * 1e6), label = paste(gene_name,",",sample), stroke = 0), size = 2) +
   #scale_size(range = c(10,1)) +
   #geom_smooth(aes(x=value, y=log2), method=lm, linewidth = 0.5) +
   guides(size = guide_legend(reverse=TRUE)) +
@@ -1709,7 +1709,7 @@ RNA.damID.table.all.all %>% filter(start != 'NA' & K9me3_diff != 'NA') %>% filte
        x = "Delta (z-score)",
        color = "log10(Ctrl expr)")
 
-ggsave("Fig6G_LD20230717_scatter_plots.pdf", height = 4, width = 8)
+ggsave("Fig6G_LD20231219_scatter_plots.pdf", height = 4, width = 8)
 
 ```
 

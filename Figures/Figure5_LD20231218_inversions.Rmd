@@ -1,5 +1,5 @@
 ---
-title: "Figure4_LD20231128_LAD2"
+title: "Figure5_LD20231128_inversions"
 date: "2023-11-28"
 output: 
   html_document:
@@ -13,7 +13,7 @@ output:
 ---
 
 Scripts for all figures in the paper.
-This is Figure 4
+This is Figure 5
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
@@ -42,19 +42,18 @@ library(ggpubr)
 ```
 
 
-
-# Figure 4A - pA-DamID of the locus
+# Figure 5A - pA-DamID of the locus
 ```{r}
 # data
 ## pA-DamID, CAST allele from my data
 DamID <- as_tibble(import("/DATA/usr/l.dauban/projects/pA-DamID/E1970_ProkDNA/2nd_round/results_mm10_nextseq_strainspecific/tracks/normalized/bin-20kb/WT_F1_LB1_CAS-20kb-combined.bw")) %>% dplyr::rename(DamID = score) %>% filter(seqnames == "chr9")
 
 ## location of clones
-clones.df = data.frame(sample = c('donor', 'T48h81'),
-           x = c(110927601, 109627353),
-           y = rep(-4, 2),
-           xend = c(110927601, 109627353),
-           yend = rep(-3.5, 2))
+clones.df = data.frame(sample = c('donor', 'T3h153', 'T143', 'T48h20', 'T3', '112653616'),
+           x = c(110927601, 109078659, 112360112, 112877498, 109077722, 112653616),
+           y = rep(-4, 6),
+           xend = c(110927601, 109078659, 112360112, 112877498, 109077722, 112653616),
+           yend = rep(-3.5, 6))
 
 
 
@@ -205,27 +204,182 @@ PlotDataTracksLight(input_tib = DamID,
                     plot_chr = "chr9", plot_start = 107939416, plot_end = 114946321,
                     color_list = c("#A6CEE3", "#F5C374"),
                     #color_list = brewer.pal(3, "Paired"),
-                    aspect_ratio = 1/4,
+                    aspect_ratio = 1/3,
                     smooth = 7,
                     #fix_yaxis = F,
                     lighten_negative = T,
                     raster = T)
 
 # save
-ggsave("Fig4A_LD20230623_locus.pdf", height = 10, width = 30)
+ggsave("Fig5A_LD20230623_locus.pdf", height = 10, width = 30)
 
 
 ```
 
 
+# Figure 5D - pA-DamID to go with the domainograms
+```{r}
 
-# Figure 4B - pA-DamID to go with the domainograms
+# Function
+PlotDataTracksLight <- function(input_tib, exp_names, color_groups, 
+                                centromeres = NULL, plot_chr = "chr1", 
+                                plot_start = 1, plot_end = 500e6,
+                                smooth = 1, color_list = NULL,
+                                fix_yaxis = F, aspect_ratio = NULL,
+                                lighten_negative = F, raster = F) {
+  
+  # Get the scores for the samples
+  tib_plot <- input_tib %>%
+    dplyr::select(seqnames, start, end, 
+                  all_of(exp_names))
+  
+  if (smooth > 1) {
+    tib_plot <- tib_plot %>%
+      mutate_at(vars(contains("Dam")), 
+                runmean, k = smooth)
+  }
+  
+  # Filter for plotting window
+  tib_plot <- tib_plot %>%
+    filter(seqnames == plot_chr,
+           start >= plot_start,
+           end <= plot_end)
+  
+  # Gather
+  tib_gather <- tib_plot %>%
+    gather(key, value, -seqnames, -start, -end) %>%
+    mutate(key = factor(key, levels = exp_names),
+           fill_column = color_groups[match(key, names(color_groups))],
+           fill_column = factor(fill_column, levels = unique(color_groups)),
+           color = ifelse(value > 0, "LAD", "iLAD"))
+  
+  # If desired, make negative values a lighter shade to improve visualization
+  # if (lighten_negative) {
+  #   tib_gather <- tib_gather %>%
+  #     mutate(fill_column = interaction(fill_column,
+  #                                      value < 0))
+  # }
+  
+  
+  
+  # Plot
+  ylimits <- quantile(tib_gather$value, c(0.001, 0.999), na.rm = T)
+  fill_column <- NULL
+  
+  plt <- tib_gather %>% 
+    ggplot(aes(fill = fill_column))
+  
+  
+  # Set all counts tracks to the same limits
+  if (raster) {
+    plt <- plt + 
+      rasterize(geom_ribbon(aes(x = start/1e6, ymax = ifelse(value<0, value,0), ymin = 0), fill = "gray", alpha = 0.5),
+                dpi = 300)
+  } else {
+    plt <- plt + 
+      geom_ribbon(aes(x = start/1e6, ymax = ifelse(value<0, value,0), ymin = 0), fill = "gray", alpha = 0.5)
+
+  }
+  
+  
+  plt <- plt + 
+    geom_ribbon(aes(x = start/1e6, ymax = ifelse(value>0, value,0), ymin = 0), fill = "gray", alpha = 0.5)+
+    geom_line(aes(x = start / 1e6, y = value), size = 0.3)+
+    geom_hline(yintercept = 0, size = 0.5) +
+    geom_segment(data=clones.df, mapping=aes(x=x/1e6, xend=xend/1e6, y=y, yend=yend), size =1)+
+    geom_segment(data=LAD_loc, mapping=aes(x=x/1e6, xend=xend/1e6, y=y, yend=yend), size =1, color = "#6BAED6")+
+    #geom_rect(aes(xmin = 112440815/1e6, xmax = 112637307/1e6, ymin = -4, ymax = 2), fill = NA, color = "red", alpha = 0.5, inherit.aes = FALSE) +
+    facet_grid(key ~ ., scales = "free_y") +
+    xlab(paste0(plot_chr, " (Mb)")) +
+    ylab("LaminB1/Dam only") +
+    scale_x_continuous(expand = c(0, 0)) + 
+    scale_y_continuous(expand = c(0.025, 0.025), limits = c(-4, 2.5)) +
+    #scale_fill_manual(values = c("#A6CEE3", "#F5C374", "purple"), guide="none") +
+    theme_classic() +
+    theme(text = element_text(size = 50))
+  
+  # Centromeres
+  if (! is.null(centromeres)) {
+    centromeres.plt <- as_tibble(centromeres) %>%
+      filter(seqnames == plot_chr) %>%
+      gather(key_centromeres, value, start, end)
+    
+    plt <- plt +
+      geom_line(data = centromeres.plt, 
+                aes(x = value / 1e6, y = 0),
+                color = "black", size = 2)
+  }
+  
+  # if (! is.null(color_list)) {
+  #   
+  #   if (lighten_negative) {
+  #     color_list <- c(color_list,
+  #                     lighten(color_list, amount = 0.5))
+  #   }
+  #   
+  #   colors <- levels(tib_gather$fill_column)
+  # 
+  #   color_list <- color_list[1:length(colors)]
+  #   names(color_list) <- colors
+  #   #colors <- recode(colors, !!!color_list)
+  # 
+  #   plt <- plt +
+  #     scale_fill_manual(values = color_list, guide = "none")
+  # } else {
+  #   plt <- plt +
+  #     scale_fill_brewer(palette = "Set1", guide = "none")
+  # }
+
+  if (fix_yaxis) {
+    plt <- plt + 
+      coord_cartesian(xlim = c(max(c(plot_start,
+                                     min(tib_gather$start))) / 1e6,
+                               min(c(plot_end,
+                                     max(tib_gather$end))) / 1e6),
+                      ylim = ylimits)
+  } else {
+    plt <- plt + 
+      coord_cartesian(xlim = c(max(c(plot_start,
+                                     min(tib_gather$start))) / 1e6,
+                               min(c(plot_end,
+                                     max(tib_gather$end))) / 1e6))
+  }
+  
+  if (! is.null(aspect_ratio)) {
+    plt <- plt +
+      theme(aspect.ratio = aspect_ratio)
+  }
+  
+  plot(plt)
+  
+}
+
+# Plot
+PlotDataTracksLight(input_tib = DamID,
+                    exp_names = c("DamID"),
+                    color_groups = c(DamID = "pA-DamID"),
+                    plot_chr = "chr9", plot_start = 107939416, plot_end = 114946321,
+                    color_list = c("gray"),
+                    #color_list = brewer.pal(3, "Paired"),
+                    aspect_ratio = 1/3,
+                    smooth = 5,
+                    #fix_yaxis = F,
+                    lighten_negative = F,
+                    raster = T)
+
+
+ggsave("Fig5D_LD20231218_locus.pdf", height = 10, width = 30)
+
+```
+
+
+# Figure 5E-F - pA-DamID to go with the domainograms
 ```{r}
 
 PlotDataTracksLight(input_tib = DamID,
                     exp_names = c("DamID"),
                     color_groups = c(DamID = "pA-DamID"),
-                    plot_chr = "chr9", plot_start = 107939416, plot_end = 114946321,
+                    plot_chr = "chr9", plot_start = 108939416, plot_end = 114946321,
                     color_list = c("gray"),
                     #color_list = brewer.pal(3, "Paired"),
                     aspect_ratio = 1/3,
@@ -235,6 +389,6 @@ PlotDataTracksLight(input_tib = DamID,
                     raster = T)
 
 
-ggsave("Fig4B_LD20230623_locus.pdf", height = 10, width = 30)
+ggsave("Fig5EF_LD20231218_locus.pdf", height = 10, width = 30)
 
 ```
