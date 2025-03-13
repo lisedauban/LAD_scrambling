@@ -1,0 +1,251 @@
+---
+title: "Figure4_LD20253012_R45_chopping"
+date: "2024-12-11"
+output: 
+  html_document:
+    theme: journal #cerulean
+    highlight: monochrome
+    toc: true
+    toc_float: true
+    code_folding: show
+  editor_options:
+    chunk_output_type: console
+---
+
+Scripts for all figures in the paper.
+This is Figure 4
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load libraries
+```{r}
+library(tidyverse)
+library(dplyr)
+library(GenomicRanges)
+library(ggplot2)
+library(ggbraid)
+library(caTools)
+
+```
+
+# data
+```{r}
+inv_start <- 110927601 
+inv_end <- 112653616
+
+del_start <- 112439588
+del_end <- 114785359
+
+del_start = (inv_end - del_start) + inv_start
+gap <- del_end - del_start
+
+del_end_2 <- del_end - gap
+
+```
+
+
+# Figure 4B - chopping
+## half
+### data
+```{r}
+# Load data
+
+load("/DATA/usr/l.dauban/projects/pA-DamID/E2518_R45_chop_83/2nd_round_E2580/Domainograms/z-score/CAST_rec/deletion/against_T201h51/cl83_smth_151/domainograms.RData")
+
+WT <- sDamID.Control %>% data.frame() %>% dplyr::rename(WT = logratio) %>% filter(seqnames == "chr9")
+R45 <- sDamID.Exp %>% data.frame() %>% dplyr::rename(R45 = logratio) %>% filter(seqnames == "chr9")
+
+####################
+
+load("/DATA/usr/l.dauban/projects/pA-DamID/E2518_R45_chop_83/2nd_round_E2580/Domainograms/z-score/CAST_rec/deletion/against_T201h51/cl83_p1_comb_smth_151/domainograms.RData")
+
+one_half <- sDamID.Exp %>% data.frame() %>% dplyr::rename(one_half = logratio) %>% filter(seqnames == "chr9")
+
+####################
+
+load("/DATA/usr/l.dauban/projects/pA-DamID/E2518_R45_chop_83/2nd_round_E2580/Domainograms/z-score/CAST_rec/deletion/against_T201h51/cl83_p2_comb_smth_151/domainograms.RData")
+
+sec_half <- sDamID.Exp %>% data.frame() %>% dplyr::rename(sec_half = logratio) %>% filter(seqnames == "chr9")
+
+####################
+
+# combine
+comb_half <- right_join(na.omit(sec_half), right_join(na.omit(one_half), right_join(WT, na.omit(R45))))
+
+comb_half_clean <- comb_half %>% select(start, WT, R45, one_half, sec_half) %>% gather(key = "clone", value = "value", -start) %>% mutate(start = ifelse(start >del_start, start-gap, start))
+
+```
+
+### t3 - plot
+```{r}
+# scale + diff
+diff_one_half <- comb_half %>% select(start, end, R45, one_half) %>% mutate(start = ifelse(start >del_start, start-gap, start), end = ifelse(end >del_start, end-gap, end)) %>% arrange(start) %>% mutate_at(3:4, function(x) scale(x)[, 1]) %>% mutate_at(3:4, function(x) runmean(x, k = 9)) %>% mutate(diff = one_half - R45)
+
+# plot
+diff_one_half %>% filter(start > 110.6e6 & start < 111.4e6) %>% 
+  ggplot() +
+  geom_rect(aes(xmin = start/1e6, xmax = end/1e6, ymin = 0, ymax = diff), color = "#68bfc3", fill = "#68bfc3") +
+  geom_vline(xintercept = inv_start/1e6, linetype = "dashed", color = "gray39") +
+  geom_vline(xintercept = del_start/1e6, linetype = "dashed", color = "gray39") +
+  coord_cartesian(ylim = c(-1.75, 0.65)) +
+  theme_bw()
+
+ggsave("Fig4B_t3_LD20231218_locus.pdf", path = "./output/", height = 2, width = 8)
+
+```
+
+
+### t4 - plot
+```{r}
+# scale + diff
+diff_sec_half <- comb_half %>% select(start, end, R45, sec_half) %>% mutate(start = ifelse(start >del_start, start-gap, start), end = ifelse(end >del_start, end-gap, end)) %>% arrange(start) %>% mutate_at(3:4, function(x) scale(x)[, 1]) %>% mutate_at(3:4, function(x) runmean(x, k = 9)) %>% mutate(diff = sec_half - R45)
+
+# plot
+diff_sec_half %>% filter(start > 110.6e6 & start < 111.4e6) %>% 
+  ggplot() +
+  geom_rect(aes(xmin = start/1e6, xmax = end/1e6, ymin = 0, ymax = diff), color = "#88ccce", fill = "#88ccce") +
+  geom_vline(xintercept = inv_start/1e6, linetype = "dashed", color = "gray39") +
+  geom_vline(xintercept = del_start/1e6, linetype = "dashed", color = "gray39") +
+  coord_cartesian(ylim = c(-1.75, 0.65)) +
+  theme_bw()
+
+ggsave("Fig4B_t4_LD20231218_locus.pdf", path = "./output/", height = 2, width = 8)
+
+```
+
+
+## fourth
+### data
+```{r}
+load("/DATA/usr/l.dauban/projects/pA-DamID/E2518_R45_chop_83/2nd_round_E2580/Domainograms/z-score/CAST_rec/deletion/against_T201h51/cl83_smth_75/domainograms.RData")
+
+WT <- sDamID.Control %>% data.frame() %>% dplyr::rename(WT = logratio) %>% filter(seqnames == "chr9")
+R45 <- sDamID.Exp %>% data.frame() %>% dplyr::rename(R45 = logratio) %>% filter(seqnames == "chr9")
+
+####################
+
+load("/DATA/usr/l.dauban/projects/pA-DamID/E2518_R45_chop_83/2nd_round_E2580/Domainograms/z-score/CAST_rec/deletion/against_T201h51/cl83_p3_comb_smth_75/domainograms.RData")
+
+one_q <- sDamID.Exp %>% data.frame() %>% dplyr::rename(one_q = logratio) %>% filter(seqnames == "chr9")
+
+####################
+
+load("/DATA/usr/l.dauban/projects/pA-DamID/E2518_R45_chop_83/2nd_round_E2580/Domainograms/z-score/CAST_rec/deletion/against_T201h51/cl83_p4_comb_smth_75/domainograms.RData")
+
+last_q <- sDamID.Exp %>% data.frame() %>% dplyr::rename(last_q = logratio) %>% filter(seqnames == "chr9")
+
+####################
+
+# combine
+comb_q <- right_join(na.omit(last_q), right_join(na.omit(one_q), right_join(WT, na.omit(R45))))
+
+comb_q_clean <- comb_q %>% select(start, WT, R45, one_q, last_q) %>% gather(key = "clone", value = "value", -start) %>% mutate(start = ifelse(start >del_start, start-gap, start)) 
+
+```
+
+### t5 - plot
+```{r}
+# scale + diff
+diff_one_q <- comb_q %>% select(start, end, R45, one_q) %>% mutate(start = ifelse(start >del_start, start-gap, start), end = ifelse(end >del_start, end-gap, end)) %>% arrange(start) %>% arrange(start) %>% mutate_at(3:4, function(x) scale(x)[, 1]) %>% mutate_at(3:4, function(x) runmean(x, k = 9)) %>% mutate(diff = one_q - R45) 
+
+# plot
+diff_one_q %>% filter(start > 110.6e6 & start < 111.4e6) %>% 
+  ggplot() +
+  geom_rect(aes(xmin = start/1e6, xmax = end/1e6, ymin = 0, ymax = diff), color = "#a8d8d8", fill = "#a8d8d8") +
+  geom_vline(xintercept = inv_start/1e6, linetype = "dashed", color = "gray39") +
+  geom_vline(xintercept = del_start/1e6, linetype = "dashed", color = "gray39") +
+  coord_cartesian(ylim = c(-1.75, 0.65)) +
+  theme_bw()
+
+ggsave("Fig4B_t5_LD20231218_locus.pdf", path = "./output/", height = 2, width = 8)
+
+```
+
+### t6 - plot
+```{r}
+# scale + diff
+diff_last_q <- comb_q %>% select(start, end, R45, last_q) %>% mutate(start = ifelse(start >del_start, start-gap, start), end = ifelse(end >del_start, end-gap, end)) %>% arrange(start) %>% mutate_at(3:4, function(x) scale(x)[, 1]) %>% mutate_at(3:4, function(x) runmean(x, k = 9)) %>% mutate(diff = last_q - R45)
+
+# plot
+diff_last_q %>% filter(start > 110.6e6 & start < 111.4e6) %>% 
+  ggplot() +
+  geom_rect(aes(xmin = start/1e6, xmax = end/1e6, ymin = 0, ymax = diff), color = "#c5e4e1", fill = "#c5e4e1") +
+  geom_vline(xintercept = inv_start/1e6, linetype = "dashed", color = "gray39") +
+  geom_vline(xintercept = del_start/1e6, linetype = "dashed", color = "gray39") +
+  coord_cartesian(ylim = c(-1.75, 0.65)) +
+  theme_bw()
+
+ggsave("Fig4B_t6_LD20231218_locus.pdf", path = "./output/", height = 2, width = 8)
+
+```
+
+
+## 3q
+### data
+```{r}
+load("/DATA/usr/l.dauban/projects/pA-DamID/E2518_R45_chop_83/2nd_round_E2580/Domainograms/z-score/CAST_rec/deletion/against_T201h51/cl83_smth_201/domainograms.RData")
+
+WT <- sDamID.Control %>% data.frame() %>% dplyr::rename(WT = logratio) %>% filter(seqnames == "chr9")
+R45 <- sDamID.Exp %>% data.frame() %>% dplyr::rename(R45 = logratio) %>% filter(seqnames == "chr9")
+
+####################
+
+load("/DATA/usr/l.dauban/projects/pA-DamID/E2518_R45_chop_83/2nd_round_E2580/Domainograms/z-score/CAST_rec/deletion/against_T201h51/cl83_p5_comb_smth_201/domainograms.RData")
+
+one3L <- sDamID.Exp %>% data.frame() %>% dplyr::rename(one3L = logratio) %>% filter(seqnames == "chr9")
+
+####################
+
+load("/DATA/usr/l.dauban/projects/pA-DamID/E2518_R45_chop_83/2nd_round_E2580/Domainograms/z-score/CAST_rec/deletion/against_T201h51/cl83_p6_comb_smth_201/domainograms.RData")
+
+last3R <- sDamID.Exp %>% data.frame() %>% dplyr::rename(last3R = logratio) %>% filter(seqnames == "chr9")
+
+####################
+
+# combine
+comb_3q <- right_join(na.omit(last3R), right_join(na.omit(one3L), right_join(WT, na.omit(R45))))
+
+comb_3q_clean <- comb_3q %>% select(start, WT, R45, one3L, last3R) %>% gather(key = "clone", value = "value", -start) %>% mutate(start = ifelse(start >del_start, start-gap, start)) 
+
+```
+
+
+### t1 - plot
+```{r}
+# scale + diff
+diff_one3L <- comb_3q %>% select(start, end, R45, one3L) %>% mutate(start = ifelse(start >del_start, start-gap, start), end = ifelse(end >del_start, end-gap, end)) %>% arrange(start) %>% mutate_at(3:4, function(x) scale(x)[, 1]) %>% mutate_at(3:4, function(x) runmean(x, k = 9)) %>% mutate(diff = one3L - R45)
+
+# plot
+diff_one3L %>% filter(start > 110.6e6 & start < 111.4e6) %>% 
+  ggplot() +
+  geom_rect(aes(xmin = start/1e6, xmax = end/1e6, ymin = 0, ymax = diff), color = "#2999a9", fill = "#2999a9") +
+  geom_vline(xintercept = inv_start/1e6, linetype = "dashed", color = "gray39") +
+  geom_vline(xintercept = del_start/1e6, linetype = "dashed", color = "gray39") +
+  coord_cartesian(ylim = c(-1.75, 0.65)) +
+  theme_bw()
+
+ggsave("Fig4B_t1_LD20231218_locus.pdf", path = "./output/", height = 2, width = 8)
+
+```
+
+### t2 - plot
+```{r}
+# scale + diff
+diff_last3R <- comb_3q %>% select(start, end, R45, last3R) %>% mutate(start = ifelse(start >del_start, start-gap, start), end = ifelse(end >del_start, end-gap, end)) %>% arrange(start) %>% mutate_at(3:4, function(x) scale(x)[, 1]) %>% mutate_at(3:4, function(x) runmean(x, k = 9)) %>% mutate(diff = last3R - R45)
+
+# plot
+diff_last3R %>% filter(start > 110.6e6 & start < 111.4e6) %>% 
+  ggplot() +
+  geom_rect(aes(xmin = start/1e6, xmax = end/1e6, ymin = 0, ymax = diff), color = "#49abb6", fill = "#49abb6") +
+  geom_vline(xintercept = inv_start/1e6, linetype = "dashed", color = "gray39") +
+  geom_vline(xintercept = del_start/1e6, linetype = "dashed", color = "gray39") +
+  coord_cartesian(ylim = c(-1.75, 0.65)) +
+  theme_bw()
+
+ggsave("Fig4B_t2_LD20231218_locus.pdf", path = "./output/", height = 2, width = 8)
+
+```
+
+

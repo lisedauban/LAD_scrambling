@@ -1,0 +1,827 @@
+---
+title: "Supp_Figure_13_LD20231128_H3K9me3"
+date: "2023-11-28"
+output: 
+  html_document:
+    theme: journal #cerulean
+    highlight: monochrome
+    toc: true
+    toc_float: true
+    code_folding: show
+  editor_options:
+    chunk_output_type: console
+---
+
+Scripts for all figures in the paper.
+This is Supp Figure 13
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Load libraries
+```{r}
+library(plyranges)
+library(dplyr)
+library(tidyverse)
+library(edgeR)
+library(DESeq2)
+library(GenomicRanges)
+library(rtracklayer)
+library(RColorBrewer)
+library(patchwork)
+library(caTools)
+library(ggrastr)
+library(ggpubr)
+library(ggplot2)
+library(colorspace)
+library(ggbeeswarm)
+
+```
+ 
+
+# Supp Figure 13A - H3K9me3 LB1 scatter
+```{r}
+LAD_loc = data.frame(sample = c('small', 'big', 'other', 'weak'),
+           x = c(109420001, 111560001, 114140001, 116420001),
+           y = rep(1.5, 4),
+           xend = c(109760000, 113640000, 114300000, 118020000),
+           yend = rep(1.5, 4))
+
+
+PlotDataTracksLight <- function(input_tib, exp_names, color_groups, 
+                                centromeres = NULL, plot_chr = "chr1", 
+                                plot_start = 1, plot_end = 500e6,
+                                smooth = 1, color_list = NULL,
+                                fix_yaxis = F, aspect_ratio = NULL,
+                                lighten_negative = F, raster = F) {
+  
+  # Get the scores for the samples
+  tib_plot <- input_tib %>%
+    dplyr::select(seqnames, start, end, 
+                  all_of(exp_names))
+  
+  if (smooth > 1) {
+    tib_plot <- tib_plot %>%
+      mutate_at(vars(contains("_")), 
+                runmean, k = smooth)
+  }
+  
+  # Filter for plotting window
+  tib_plot <- tib_plot %>%
+    filter(seqnames == plot_chr,
+           start >= plot_start,
+           end <= plot_end)
+  
+  # Gather
+  tib_gather <- tib_plot %>%
+    gather(key, value, -seqnames, -start, -end) %>%
+    mutate(key = factor(key, levels = exp_names),
+           fill_column = color_groups[match(key, names(color_groups))],
+           fill_column = factor(fill_column, levels = unique(color_groups)))
+  
+  # If desired, make negative values a lighter shade to improve visualization
+  if (lighten_negative) {
+    tib_gather <- tib_gather %>%
+      mutate(fill_column = interaction(fill_column,
+                                       value < 0))
+  }
+  
+  
+  
+  # Plot
+  ylimits <- quantile(tib_gather$value, c(0.001, 0.999), na.rm = T)
+  fill_column <- NULL
+  
+  plt <- tib_gather %>% 
+    ggplot(aes(fill = fill_column))
+  
+  
+  # Set all counts tracks to the same limits
+  if (raster) {
+    plt <- plt + 
+      rasterize(geom_rect(aes(xmin = start / 1e6, xmax = end / 1e6, 
+                              ymin = 0, ymax = value)),
+                dpi = 300)
+  } else {
+    plt <- plt + 
+      geom_rect(aes(xmin = start / 1e6, xmax = end / 1e6, 
+                    ymin = 0, ymax = value))
+  }
+  
+  plt <- plt + 
+    geom_hline(yintercept = 0, size = 0.5) +
+    facet_grid(key ~ ., scales = "free_y") +
+    xlab(paste0(plot_chr, " (Mb)")) +
+    ylab("LaminB1/Dam only") +
+    geom_segment(data=LAD_loc, mapping=aes(x=x/1e6, xend=xend/1e6, y=y, yend=yend), size =1, color = "#6BAED6")+
+    #geom_vline(xintercept = 112440815/1e6)+
+    #geom_vline(xintercept = 112637307/1e6)+
+    scale_x_continuous(expand = c(0, 0)) + 
+    scale_y_continuous(expand = c(0.025, 0.025)) +
+    theme_classic() 
+    #theme(text = element_text(size = 50))
+  
+  # Centromeres
+  if (! is.null(centromeres)) {
+    centromeres.plt <- as_tibble(centromeres) %>%
+      filter(seqnames == plot_chr) %>%
+      gather(key_centromeres, value, start, end)
+    
+    plt <- plt +
+      geom_line(data = centromeres.plt, 
+                aes(x = value / 1e6, y = 0),
+                color = "black", size = 2)
+  }
+  
+  if (! is.null(color_list)) {
+    
+    if (lighten_negative) {
+      color_list <- c(color_list,
+                      lighten(color_list, amount = 0.5))
+    }
+    
+    colors <- levels(tib_gather$fill_column)
+    
+    color_list <- color_list[1:length(colors)]
+    names(color_list) <- colors
+    #colors <- recode(colors, !!!color_list)
+    
+    plt <- plt +
+      scale_fill_manual(values = color_list, guide = "none")
+  } else {
+    plt <- plt +
+      scale_fill_brewer(palette = "Set1", guide = "none")
+  }
+  
+  if (fix_yaxis) {
+    plt <- plt + 
+      coord_cartesian(xlim = c(max(c(plot_start,
+                                     min(tib_gather$start))) / 1e6,
+                               min(c(plot_end,
+                                     max(tib_gather$end))) / 1e6),
+                      ylim = ylimits)
+  } else {
+    plt <- plt + 
+      coord_cartesian(xlim = c(max(c(plot_start,
+                                     min(tib_gather$start))) / 1e6,
+                               min(c(plot_end,
+                                     max(tib_gather$end))) / 1e6))
+  }
+  
+  if (! is.null(aspect_ratio)) {
+    plt <- plt +
+      theme(aspect.ratio = aspect_ratio)
+  }
+  
+  plot(plt)
+  
+}
+
+
+########################################################
+####### scatter - smoothed data  - genome wide #########
+########################################################
+
+
+# Load smoothed data generated from the domainograms
+load("/DATA/usr/l.dauban/projects/pA-DamID/E2063_rec_clones_T3_T201h49_T201h143_1_LB1_K9me2/2nd_round/Domainograms/z-score/129_ctrl/T201h49r_comb_LB1/domainograms.RData")
+Control.LB1 = sDamID.Control
+colnames(mcols(Control.LB1)) = "Control_LB1"
+
+
+load("/DATA/usr/l.dauban/projects/pA-DamID/E2063_rec_clones_T3_T201h49_T201h143_2_htchm/Domainograms/z-score/H3K9me3/129_ctrl/T201h49r_comb_col_green/domainograms.RData")
+Control.H3K9me3 = sDamID.Control
+colnames(mcols(Control.H3K9me3)) = "Control_H3K9me3"
+
+
+scomb = data.frame(LB1 = Control.LB1$Control_LB1,
+                   H3K9me3 = Control.H3K9me3$Control_H3K9me3)
+
+
+ggplot(scomb, aes(x= H3K9me3, y= LB1))+
+  geom_hex()+
+  geom_smooth(method=lm) +
+  stat_cor(method = "pearson") +
+  labs(y = "LmnB1 pA-DamID (z-score)",
+       x = "H3K9me3 pA-DamID (z-score)") +
+  theme_bw()
+
+ggsave("SuppFig13A_LD20230815_scatter.pdf", path = "./output/", height = 5, width = 6)
+```
+
+
+# Supp Figure 13B - H3K9me3 LB1 tracks
+```{r}
+#############################################
+####### tracks - smoothed data #########
+#############################################
+
+
+Control.LB1.df = data.frame(Control.LB1)
+Control.H3K9me3.df = data.frame(Control.H3K9me3)
+
+
+plot1 = PlotDataTracksLight(input_tib = Control.LB1.df,
+                    exp_names = c("Control_LB1"),
+                    color_groups = c(LB1 = "samples"),
+                    plot_chr = "chr9", plot_start = 60e6, plot_end = 120e6,
+                    color_list = c("#A6CEE3", "#F5C374"),
+                    #color_list = brewer.pal(3, "Paired"),
+                    aspect_ratio = 1/4,
+                    smooth = 10,
+                    #fix_yaxis = F,
+                    lighten_negative = T,
+                    raster = T)
+
+
+
+plot2 = PlotDataTracksLight(input_tib = Control.H3K9me3.df,
+                    exp_names = c("Control_H3K9me3"),
+                    color_groups = c(LB1 = "samples"),
+                    plot_chr = "chr9", plot_start = 60e6, plot_end = 120e6,
+                    color_list = c("#A6CEE3", "#F5C374"),
+                    #color_list = brewer.pal(3, "Paired"),
+                    aspect_ratio = 1/4,
+                    smooth = 10,
+                    #fix_yaxis = F,
+                    lighten_negative = T,
+                    raster = T)
+
+
+plot1+
+plot2+
+plot_layout(ncol=1, guides = "collect", heights = c(1,1))
+
+
+ggsave("SuppFig13B_LD20230811_tracks.pdf", path = "./output/", height = 9, width = 13)
+```
+
+
+# Supp Figure 13B - H3K9me3 LB1 tracks zoom
+```{r}
+#############################################
+####### tracks - smoothed data - zoom #########
+#############################################
+
+
+Control.LB1.df = data.frame(Control.LB1)
+Control.H3K9me3.df = data.frame(Control.H3K9me3)
+
+
+plot1 = PlotDataTracksLight(input_tib = Control.LB1.df,
+                    exp_names = c("Control_LB1"),
+                    color_groups = c(LB1 = "samples"),
+                    plot_chr = "chr9", plot_start = 107939416, plot_end = 119448158,
+                    color_list = c("#A6CEE3", "#F5C374"),
+                    #color_list = brewer.pal(3, "Paired"),
+                    aspect_ratio = 1/4,
+                    smooth = 10,
+                    #fix_yaxis = F,
+                    lighten_negative = T,
+                    raster = T)
+
+
+
+plot2 = PlotDataTracksLight(input_tib = Control.H3K9me3.df,
+                    exp_names = c("Control_H3K9me3"),
+                    color_groups = c(LB1 = "samples"),
+                    plot_chr = "chr9", plot_start = 107939416, plot_end = 119448158,
+                    color_list = c("#A6CEE3", "#F5C374"),
+                    #color_list = brewer.pal(3, "Paired"),
+                    aspect_ratio = 1/4,
+                    smooth = 10,
+                    #fix_yaxis = F,
+                    lighten_negative = T,
+                    raster = T)
+
+
+plot1+
+plot2+
+plot_layout(ncol=1, guides = "collect", heights = c(1,1))
+
+
+ggsave("SuppFig13B_LD20230815_tracks_zoom.pdf", path = "./output/", height = 9, width = 13)
+
+```
+
+
+
+# Supp Figure 13F - LaminB1 changes in i10
+```{r}
+
+clones.df = data.frame(sample = c('donor', 'T48h81', 'T3h153'),
+           x = c(110927601, 109627353, 109078659),
+           y = rep(2, 3),
+           xend = c(110927601, 109627353, 109078659),
+           yend = rep(-2, 3))
+
+
+# Import data
+T48h81r18_diff.gr = rtracklayer::import("/DATA/usr/l.dauban/projects/pA-DamID/E1995_rec_clones_T3h153_T48h81_131/Differential_tracks/25kb/T48h81r18_diff_track.bw")
+
+# Invert
+T48h81r18_diff.gr[seqnames(T48h81r18_diff.gr) == "chr9" & start(T48h81r18_diff.gr) > clones.df[2,2] & end(T48h81r18_diff.gr)< clones.df[1,2]]$score <- rev(T48h81r18_diff.gr[seqnames(T48h81r18_diff.gr) == "chr9" & start(T48h81r18_diff.gr) > clones.df[2,2] & end(T48h81r18_diff.gr)< clones.df[1,2]]$score)
+
+T48h81r18_diff.gr <- T48h81r18_diff.gr %>% as.tibble() %>% dplyr::rename(T48h81r18_ = score)
+
+
+# Function
+PlotDataTracksLight <- function(input_tib, exp_names, color_groups, 
+                                centromeres = NULL, plot_chr = "chr1", 
+                                plot_start = 1, plot_end = 500e6,
+                                smooth = 1, color_list = NULL,
+                                fix_yaxis = F, aspect_ratio = NULL,
+                                lighten_negative = F, raster = F) {
+  
+  # Get the scores for the samples
+  tib_plot <- input_tib %>%
+    dplyr::select(seqnames, start, end, 
+                  all_of(exp_names))
+  
+  if (smooth > 1) {
+    tib_plot <- tib_plot %>%
+      mutate_at(vars(contains("_")), 
+                runmean, k = smooth)
+  }
+  
+  # Filter for plotting window
+  tib_plot <- tib_plot %>%
+    filter(seqnames == plot_chr,
+           start >= plot_start,
+           end <= plot_end)
+  
+  # Gather
+  tib_gather <- tib_plot %>%
+    gather(key, value, -seqnames, -start, -end) %>%
+    mutate(key = factor(key, levels = exp_names),
+           fill_column = color_groups[match(key, names(color_groups))],
+           fill_column = factor(fill_column, levels = unique(color_groups)))
+  
+  # If desired, make negative values a lighter shade to improve visualization
+  if (lighten_negative) {
+    tib_gather <- tib_gather %>%
+      mutate(fill_column = interaction(fill_column,
+                                       value < 0))
+  }
+  
+  
+  
+  # Plot
+  ylimits <- quantile(tib_gather$value, c(0.001, 0.999), na.rm = T)
+  fill_column <- NULL
+  
+  plt <- tib_gather %>% 
+    ggplot(aes(fill = fill_column))
+  
+  
+  # Set all counts tracks to the same limits
+  if (raster) {
+    plt <- plt + 
+      rasterize(geom_rect(aes(xmin = start / 1e6, xmax = end / 1e6, 
+                              ymin = 0, ymax = value)),
+                dpi = 300)
+  } else {
+    plt <- plt + 
+      geom_rect(aes(xmin = start / 1e6, xmax = end / 1e6, 
+                    ymin = 0, ymax = value))
+  }
+  
+  plt <- plt + 
+    geom_hline(yintercept = 0, size = 0.5) +
+    geom_vline(xintercept = clones.df[1,2]/1e6, size = 0.5, col = "grey") +
+    geom_vline(xintercept = clones.df[2,2]/1e6, size = 0.5, col = "grey") +
+    #geom_segment(data=clones.df, mapping=aes(x=x/1e6, xend=xend/1e6, y=y, yend=yend), size =1)+
+    #geom_segment(data=LAD_loc, mapping=aes(x=x/1e6, xend=xend/1e6, y=y, yend=yend), size =1, color = "#6BAED6")+
+    facet_grid(key ~ ., scales = "free_y") +
+    xlab(paste0(plot_chr, " (Mb)")) +
+    ylab("Change in LmnB1") +
+    scale_x_continuous(expand = c(0, 0)) + 
+    scale_y_continuous(expand = c(0.025, 0.025), limits = c(-1.5, 1.5)) +
+    theme_classic() +
+    theme(text = element_text(size = 50))
+  
+  # Centromeres
+  if (! is.null(centromeres)) {
+    centromeres.plt <- as_tibble(centromeres) %>%
+      filter(seqnames == plot_chr) %>%
+      gather(key_centromeres, value, start, end)
+    
+    plt <- plt +
+      geom_line(data = centromeres.plt, 
+                aes(x = value / 1e6, y = 0),
+                color = "black", size = 2)
+  }
+  
+  if (! is.null(color_list)) {
+    
+    if (lighten_negative) {
+      color_list <- c(color_list,
+                      lighten(color_list, amount = 0.5))
+    }
+    
+    colors <- levels(tib_gather$fill_column)
+    
+    color_list <- color_list[1:length(colors)]
+    names(color_list) <- colors
+    #colors <- recode(colors, !!!color_list)
+    
+    plt <- plt +
+      scale_fill_manual(values = color_list, guide = "none")
+  } else {
+    plt <- plt +
+      scale_fill_brewer(palette = "Set1", guide = "none")
+  }
+  
+  if (fix_yaxis) {
+    plt <- plt + 
+      coord_cartesian(xlim = c(max(c(plot_start,
+                                     min(tib_gather$start))) / 1e6,
+                               min(c(plot_end,
+                                     max(tib_gather$end))) / 1e6),
+                      ylim = ylimits)
+  } else {
+    plt <- plt + 
+      coord_cartesian(xlim = c(max(c(plot_start,
+                                     min(tib_gather$start))) / 1e6,
+                               min(c(plot_end,
+                                     max(tib_gather$end))) / 1e6))
+  }
+  
+  if (! is.null(aspect_ratio)) {
+    plt <- plt +
+      theme(aspect.ratio = aspect_ratio)
+  }
+  
+  plot(plt)
+  
+}
+
+# Plot
+PlotDataTracksLight(input_tib = T48h81r18_diff.gr,
+                    exp_names = c("T48h81r18_"),
+                    color_groups = c(T48h81r18_ = "T48h81r18_"),
+                    plot_chr = "chr9", plot_start = 107939416, plot_end = 114946321,
+                    color_list = c("#D6604D", "#4393C3"),
+                    #color_list = brewer.pal(5, "RdBu"),
+                    aspect_ratio = 1/7,
+                    smooth = 7,
+                    #fix_yaxis = F,
+                    lighten_negative = T,
+                    raster = T)
+
+
+# save
+ggsave("SuppFig13F_LD20230815_T48h81r18_LB1_diff.pdf", path = "./output/", height = 5, width = 20)
+
+
+```
+
+
+# Figure Supp 13G - LaminB1 changes in i12
+```{r}
+
+# Import data
+T3h153r10_diff.gr = rtracklayer::import("/DATA/usr/l.dauban/projects/pA-DamID/E1995_rec_clones_T3h153_T48h81_131/Differential_tracks/25kb/T3h153r10_diff_track.bw")
+
+# Invert
+T3h153r10_diff.gr[seqnames(T3h153r10_diff.gr) == "chr9" & start(T3h153r10_diff.gr) > clones.df[3,2] & end(T3h153r10_diff.gr)< clones.df[1,2]]$score <- rev(T3h153r10_diff.gr[seqnames(T3h153r10_diff.gr) == "chr9" & start(T3h153r10_diff.gr) > clones.df[3,2] & end(T3h153r10_diff.gr)< clones.df[1,2]]$score)
+
+T3h153r10_diff.gr <- T3h153r10_diff.gr %>% as.tibble() %>% dplyr::rename(T3h153r10_ = score)
+
+
+# Function
+PlotDataTracksLight <- function(input_tib, exp_names, color_groups, 
+                                centromeres = NULL, plot_chr = "chr1", 
+                                plot_start = 1, plot_end = 500e6,
+                                smooth = 1, color_list = NULL,
+                                fix_yaxis = F, aspect_ratio = NULL,
+                                lighten_negative = F, raster = F) {
+  
+  # Get the scores for the samples
+  tib_plot <- input_tib %>%
+    dplyr::select(seqnames, start, end, 
+                  all_of(exp_names))
+  
+  if (smooth > 1) {
+    tib_plot <- tib_plot %>%
+      mutate_at(vars(contains("_")), 
+                runmean, k = smooth)
+  }
+  
+  # Filter for plotting window
+  tib_plot <- tib_plot %>%
+    filter(seqnames == plot_chr,
+           start >= plot_start,
+           end <= plot_end)
+  
+  # Gather
+  tib_gather <- tib_plot %>%
+    gather(key, value, -seqnames, -start, -end) %>%
+    mutate(key = factor(key, levels = exp_names),
+           fill_column = color_groups[match(key, names(color_groups))],
+           fill_column = factor(fill_column, levels = unique(color_groups)))
+  
+  # If desired, make negative values a lighter shade to improve visualization
+  if (lighten_negative) {
+    tib_gather <- tib_gather %>%
+      mutate(fill_column = interaction(fill_column,
+                                       value < 0))
+  }
+  
+  
+  
+  # Plot
+  ylimits <- quantile(tib_gather$value, c(0.001, 0.999), na.rm = T)
+  fill_column <- NULL
+  
+  plt <- tib_gather %>% 
+    ggplot(aes(fill = fill_column))
+  
+  
+  # Set all counts tracks to the same limits
+  if (raster) {
+    plt <- plt + 
+      rasterize(geom_rect(aes(xmin = start / 1e6, xmax = end / 1e6, 
+                              ymin = 0, ymax = value)),
+                dpi = 300)
+  } else {
+    plt <- plt + 
+      geom_rect(aes(xmin = start / 1e6, xmax = end / 1e6, 
+                    ymin = 0, ymax = value))
+  }
+  
+  plt <- plt + 
+    geom_hline(yintercept = 0, size = 0.5) +
+    geom_vline(xintercept = clones.df[1,2]/1e6, size = 0.5, col = "grey") +
+    geom_vline(xintercept = clones.df[3,2]/1e6, size = 0.5, col = "grey") +
+    #geom_segment(data=clones.df, mapping=aes(x=x/1e6, xend=xend/1e6, y=y, yend=yend), size =1)+
+    #geom_segment(data=LAD_loc, mapping=aes(x=x/1e6, xend=xend/1e6, y=y, yend=yend), size =1, color = "#6BAED6")+
+    facet_grid(key ~ ., scales = "free_y") +
+    xlab(paste0(plot_chr, " (Mb)")) +
+    ylab("Change in LmnB1") +
+    scale_x_continuous(expand = c(0, 0)) + 
+    scale_y_continuous(expand = c(0.025, 0.025), limits = c(-1.5, 1.5)) +
+    theme_classic() +
+    theme(text = element_text(size = 50))
+  
+  # Centromeres
+  if (! is.null(centromeres)) {
+    centromeres.plt <- as_tibble(centromeres) %>%
+      filter(seqnames == plot_chr) %>%
+      gather(key_centromeres, value, start, end)
+    
+    plt <- plt +
+      geom_line(data = centromeres.plt, 
+                aes(x = value / 1e6, y = 0),
+                color = "black", size = 2)
+  }
+  
+  if (! is.null(color_list)) {
+    
+    if (lighten_negative) {
+      color_list <- c(color_list,
+                      lighten(color_list, amount = 0.5))
+    }
+    
+    colors <- levels(tib_gather$fill_column)
+    
+    color_list <- color_list[1:length(colors)]
+    names(color_list) <- colors
+    #colors <- recode(colors, !!!color_list)
+    
+    plt <- plt +
+      scale_fill_manual(values = color_list, guide = "none")
+  } else {
+    plt <- plt +
+      scale_fill_brewer(palette = "Set1", guide = "none")
+  }
+  
+  if (fix_yaxis) {
+    plt <- plt + 
+      coord_cartesian(xlim = c(max(c(plot_start,
+                                     min(tib_gather$start))) / 1e6,
+                               min(c(plot_end,
+                                     max(tib_gather$end))) / 1e6),
+                      ylim = ylimits)
+  } else {
+    plt <- plt + 
+      coord_cartesian(xlim = c(max(c(plot_start,
+                                     min(tib_gather$start))) / 1e6,
+                               min(c(plot_end,
+                                     max(tib_gather$end))) / 1e6))
+  }
+  
+  if (! is.null(aspect_ratio)) {
+    plt <- plt +
+      theme(aspect.ratio = aspect_ratio)
+  }
+  
+  plot(plt)
+  
+}
+
+# Plot
+PlotDataTracksLight(input_tib = T3h153r10_diff.gr,
+                    exp_names = c("T3h153r10_"),
+                    color_groups = c(T3h153r10_ = "T3h153r10_"),
+                    plot_chr = "chr9", plot_start = 107939416, plot_end = 114946321,
+                    color_list = c("#D6604D", "#4393C3"),
+                    #color_list = brewer.pal(5, "RdBu"),
+                    aspect_ratio = 1/7,
+                    smooth = 7,
+                    #fix_yaxis = F,
+                    lighten_negative = T,
+                    raster = T)
+
+# save
+ggsave("SuppFig13G_LD20230815_T3h153r10_LB1_diff.pdf", path = "./output/", height = 5, width = 20)
+
+```
+
+
+# Figure Supp 13H - H3K9me3 size
+```{r}
+# Load data
+LADs <- read.table("/DATA/usr/l.dauban/projects/pA-DamID/E2063_rec_clones_T3_T201h49_T201h143_1_LB1_K9me2/2nd_round/results_mm10_nextseq_strainspecific/HMM/bin-25kb/T201h49_LB1-25kb-combined_AD.bed.gz")
+colnames(LADs) <- c("seqnames", "start", "end")
+
+LADs.gr <- makeGRangesFromDataFrame(LADs)
+
+
+H3K9me3 <- read.table("/DATA/usr/l.dauban/projects/pA-DamID/E2063_rec_clones_T3_T201h49_T201h143_2_htchm/results_mm10_nextseq_strainspecific/HMM/bin-25kb/T201h49_H3K9me3-25kb-combined_AD.bed.gz")
+colnames(H3K9me3) <- c("seqnames", "start", "end")
+
+H3K9me3.gr <- makeGRangesFromDataFrame(H3K9me3)
+
+
+# find overlap LADs - H3K9me3
+ovl <- findOverlaps(LADs.gr, H3K9me3.gr)
+
+H3K9me3 <- H3K9me3 %>% mutate(ovl = ifelse(row_number() %in% subjectHits(ovl), "yes", "no")) 
+H3K9me3$size <- H3K9me3$end - H3K9me3$start
+
+# plot
+H3K9me3 %>% filter(seqnames != "chrY") %>% 
+  ggplot(aes(y = size/1e6, x = ovl, color = ovl)) +
+  geom_violin() +
+  geom_beeswarm(cex = 0.2, alpha = 0.5) +
+  stat_summary(fun=median, geom="crossbar", width=0.3, size = 0.3, color = "black")+
+  geom_signif(test = "wilcox.test", test.args = list(alternative = c("two.sided")), comparisons = list(c("yes", "no")), y_position = c(13), color = "black") +
+  labs(x = "H3K9me3-LAD overlap",
+       y = "H3K9me3 domain size (Mb)",
+       title = "") +
+  scale_color_manual(values = c("#238443", "#ADDD8E")) +
+  theme_bw() +
+  theme(legend.position = "none")
+
+ggsave("SuppFig13H_LD20241125_H3K9me3_size.pdf", path = "./output/", height = 5, width = 5)
+
+```
+
+
+
+# Figure Supp 13I - H3K9me3 size distance scatter
+```{r}
+# for non overlapping H3K9me3 and LADs
+dist_ <- data.frame(distanceToNearest(H3K9me3.gr, LADs.gr))
+
+H3K9me3 <- H3K9me3 %>% mutate(dist = dist_$distance)
+
+
+# for overlapping H3K9me3 and LADs
+
+# find the ones that overlap
+ovl_2 <- findOverlaps(H3K9me3.gr, LADs.gr) %>% data.frame() %>% dplyr::rename(group = queryHits, value =  subjectHits)   
+
+# find the two closest LADs for each domain
+try <- nearestKNeighbors(H3K9me3.gr, LADs.gr, k = 2) %>% data.frame() %>% select(-group_name)
+
+# select the two closest LADs only for the domains that overlap
+essai <- try %>% filter(group %in% ovl_2$group)
+
+# remove the LAD that overlaps
+diff_ <- dplyr::setdiff(essai, ovl_2)
+
+#### I am missing 32 H3K9me3 domains.
+#### Some of them overlap 2 LADs!!
+
+# find them
+## the ones that have a distance of 0
+v <- dist_ %>% data.frame() %>% filter(distance == 0) %>% dplyr::select(queryHits) %>% dplyr::rename(group = queryHits)
+## the ones founds previously
+v2 <- data.frame(group = diff_$group)
+
+missing <- dplyr::setdiff(v, v2)
+missing$group_2 <- 1:32
+
+# compute the three closest LAD only for them
+try2 <- nearestKNeighbors(H3K9me3.gr[missing$group,], LADs.gr, k = 3) %>% data.frame() %>% dplyr::select(-group_name)
+
+
+for(i in 1:32){
+  try2[which(try2$group == i),]$group <- missing$group[missing$group_2 == i]
+}
+
+
+diff_2 <- dplyr::setdiff(try2, ovl_2)
+
+
+##### data for 18 more H3K9me3 domains, still 14 missing.
+
+### combine all overlapping domaines
+comb <- rbind(diff_, diff_2)
+
+gr.H3K9 <- H3K9me3.gr[comb$group,]
+gr.LAD <- LADs.gr[comb$value,]
+
+### compute distance
+dist_ovl <- 1:877
+
+for(i in 1:877){dist_ovl[i] = distance(gr.H3K9[i,], gr.LAD[i,])
+}
+
+### add to big df
+H3K9me3[comb$group,]$dist <- dist_ovl
+
+# plot
+H3K9me3 %>% filter(seqnames != "chrY") %>%
+  ggplot(aes(x=dist/1e6, y = size/1e6, alpha = 0.25, color = ovl)) +
+  geom_point(size = 3) +
+  #geom_smooth(method=lm, linewidth = 0.5, color = "black") +
+  stat_cor(method = "pearson") +
+  scale_color_manual(values = c("#238443", "#ADDD8E")) +
+  labs(x = "distance to nearest LAD (Mb)",
+       y = "H3K9me3 domain size (Mb)",
+       title = "") +
+  theme_bw() +
+  theme(legend.position = "none")
+
+ggsave("SuppFig13I_LD20241125_H3K9me3_size_distance_scatter.pdf", path = "./output/", height = 5, width = 5)
+
+```
+
+
+
+# Figure Supp 13I - H3K9me3 distance to LAD
+```{r}
+H3K9me3 %>% filter(seqnames != "chrY") %>%
+  ggplot(aes(x=ovl, y = dist/1e6, alpha = 0.25, color = ovl)) +
+  geom_violin() +
+  geom_beeswarm(cex = 0.5, alpha = 0.5) +
+  stat_summary(fun=median, geom="crossbar", width=0.3, size = 0.3, color = "black")+
+  geom_signif(test = "wilcox.test", test.args = list(alternative = c("two.sided")), comparisons = list(c("yes", "no")), y_position = c(22), color = "black") +
+  #geom_smooth(method=lm, linewidth = 0.5, color = "black") +
+  stat_cor(method = "pearson") +
+  scale_color_manual(values = c("#238443", "#ADDD8E")) +
+  labs(x = "",
+       y = "distance to nearest LAD (Mb)",
+       title = "") +
+  theme_bw() +
+  theme(legend.position = "none")
+
+ggsave("SuppFig13I_LD20241125_H3K9me3_distance.pdf", path = "./output/", height = 5, width = 5)
+
+```
+
+
+
+# Figure Supp 13J - H3K9me3 DamID score
+```{r}
+# load data
+LADs.bw <- import("/DATA/usr/l.dauban/projects/pA-DamID/E2063_rec_clones_T3_T201h49_T201h143_1_LB1_K9me2/2nd_round/results_mm10_nextseq_strainspecific/tracks/normalized/bin-25kb/T201h49_LB1-25kb-combined.bw")
+
+H3K9me3.bw <- import("/DATA/usr/l.dauban/projects/pA-DamID/E2063_rec_clones_T3_T201h49_T201h143_2_htchm/results_mm10_nextseq_strainspecific/tracks/normalized/bin-25kb/T201h49_H3K9me3-25kb-combined.bw")
+
+# analyse
+ovl.bw <- findOverlaps(H3K9me3.bw, H3K9me3.gr)
+
+LAD.bw.df <- data.frame(H3K9me3.bw) %>% filter(row_number() %in% queryHits(ovl.bw)) %>% mutate(bin = subjectHits(ovl.bw)) %>% group_by(bin) %>% summarise(m = median(score))
+
+# add to big df
+H3K9me3$m = LAD.bw.df$m
+
+# plot
+H3K9me3 %>% filter(seqnames != "chrY") %>%
+  ggplot(aes(x=ovl, y = m, alpha = 0.25, color = ovl)) +
+  geom_violin() +
+  geom_beeswarm(cex = 0.9, alpha = 0.5) +
+  stat_summary(fun=median, geom="crossbar", width=0.3, size = 0.3, color = "black")+
+  geom_signif(test = "wilcox.test", test.args = list(alternative = c("two.sided")), comparisons = list(c("yes", "no")), y_position = c(1.6), color = "black") +
+  #geom_smooth(method=lm, linewidth = 0.5, color = "black") +
+  stat_cor(method = "pearson") +
+  scale_color_manual(values = c("#238443", "#ADDD8E")) +
+  labs(x = "",
+       y = "H3K9me3 score",
+       title = "") +
+  theme_bw() +
+  theme(legend.position = "none")
+
+ggsave("SuppFig13J_LD20241125_H3K9me3_DamID.pdf", path = "./output/", height = 5, width = 5)
+
+```
+
+
+
+

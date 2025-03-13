@@ -1,0 +1,847 @@
+---
+title: "Figure_Supp_4_reproducibility"
+date: "2023-11-28"
+output: 
+  html_document:
+    theme: journal #cerulean
+    highlight: monochrome
+    toc: true
+    toc_float: true
+    code_folding: show
+  editor_options:
+    chunk_output_type: console
+---
+
+Scripts for all figures in the paper.
+This is Figure Supp 4
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Note that here the pearson correlation is computed on the difference between the log2 ratios and not the z-score
+
+
+# Load libraries
+```{r}
+library(dplyr)
+library(tidyr)
+library(plyranges)
+library(ggplot2)
+library(ggpubr)
+library(GenomicRanges)
+library(ggbreak)
+library(ggrastr)
+
+```
+
+# Extract domainograms values for each clone
+## Windows
+```{r}
+# Tdgf1: chr9:110937608-110948158
+
+# window of 1e6L, 4e6R, alos the one used on the pA-DamID tracks on the paper figures
+w1.4 = data.frame(start = 109937608, end = 114948158)
+
+w2.4 = data.frame(start = 108939416, end = 114946321)
+
+w3.4 = data.frame(start = 107939416, end = 114946321)
+
+w1.8 = data.frame(start = 109937608, end = 119448158)
+
+w06.45 = data.frame(start = 110337608, end = 115446321)
+
+```
+
+## T201h179
+```{r}
+# load data
+load("/DATA/usr/l.dauban/projects/pA-DamID/test_reproducibility/T201h179r28/domainograms.RData")
+T201h179 = sDamID.Control
+T201h179r28 = sDamID.Exp
+T201h179r28_DG = DG.Exp
+T201h179r28_DG_raw = DG.Exp_raw
+
+
+load("/DATA/usr/l.dauban/projects/pA-DamID/test_reproducibility/T201h179r29/domainograms.RData")
+T201h179r29 = sDamID.Exp
+T201h179r29_DG = DG.Exp
+T201h179r29_DG_raw = DG.Exp_raw
+
+
+# compute gatc fragment length - code taken from the plot.domainogram function, just take the plotted window and take the mean of the fragment size in that window.
+x.axis.slack=0.04
+xslack<-(w1.4$end-w1.4$start)*x.axis.slack 
+dgsub<-T201h179r28_DG_raw[start(T201h179r28_DG_raw)>=w1.4$start-xslack & end(T201h179r28_DG_raw)<=w1.4$end+xslack] #reduce dg to plotting region
+gatc2len<-mean(width(dgsub))
+gatc2len
+
+# combine the 2 clones
+T201h179r28_DG_raw_2 <- T201h179r28_DG_raw %>% as_tibble() %>% gather(key="window", value = "r28", -c(1:5)) %>% mutate(window = factor(window, levels =c("X301", "X313", "X359", "X413", "X475", "X545", "X627", "X721", "X829", "X955", "X1097", "X1261", "X1451", "X1669", "X1919", "X2207", "X2537", "X2917")))
+
+T201h179r29_DG_raw_2 <- T201h179r29_DG_raw %>% as_tibble() %>% gather(key="window", value = "r29", -c(1:5)) %>% mutate(window = factor(window, levels =c("X301", "X313", "X359", "X413", "X475", "X545", "X627", "X721", "X829", "X955", "X1097", "X1261", "X1451", "X1669", "X1919", "X2207", "X2537", "X2917"))) 
+
+T201h179r_comb_DG_raw_2 <- right_join(T201h179r28_DG_raw_2, T201h179r29_DG_raw_2)
+
+```
+
+## T201h44
+```{r}
+# load data
+load("/DATA/usr/l.dauban/projects/pA-DamID/test_reproducibility/T201h44r3/domainograms.RData")
+T201h44 = sDamID.Control
+T201h44r3 = sDamID.Exp
+T201h44r3_DG = DG.Exp
+T201h44r3_DG_raw = DG.Exp_raw
+
+
+load("/DATA/usr/l.dauban/projects/pA-DamID/test_reproducibility/T201h44r14/domainograms.RData")
+T201h44r14 = sDamID.Exp
+T201h44r14_DG = DG.Exp
+T201h44r14_DG_raw = DG.Exp_raw
+
+
+# compute gatc fragment length - code taken from the plot.domainogram function, just take the plotted window and take the mean of the fragment size in that window.
+x.axis.slack=0.04
+xslack<-(w1.4$end-w1.4$start)*x.axis.slack 
+dgsub<-T201h44r3_DG_raw[start(T201h44r3_DG_raw)>=w1.4$start-xslack & end(T201h44r3_DG_raw)<=w1.4$end+xslack] #reduce dg to plotting region
+gatc2len<-mean(width(dgsub))
+gatc2len
+
+# combine the 2 clones
+T201h44r3_DG_raw_2 <- T201h44r3_DG_raw %>% as_tibble() %>% gather(key="window", value = "r3", -c(1:5)) %>% mutate(window = factor(window, levels =c("X301", "X313", "X359", "X413", "X475", "X545", "X627", "X721", "X829", "X955", "X1097", "X1261", "X1451", "X1669", "X1919", "X2207", "X2537", "X2917")))
+
+T201h44r14_DG_raw_2 <- T201h44r14_DG_raw %>% as_tibble() %>% gather(key="window", value = "r14", -c(1:5)) %>% mutate(window = factor(window, levels =c("X301", "X313", "X359", "X413", "X475", "X545", "X627", "X721", "X829", "X955", "X1097", "X1261", "X1451", "X1669", "X1919", "X2207", "X2537", "X2917"))) 
+
+T201h44r_comb_DG_raw_2 <- right_join(T201h44r3_DG_raw_2, T201h44r14_DG_raw_2)
+
+```
+
+## T201h65
+```{r}
+# load data
+load("/DATA/usr/l.dauban/projects/pA-DamID/test_reproducibility/T201h65r12/domainograms.RData")
+T201h65 = sDamID.Control
+T201h65r12 = sDamID.Exp
+T201h65r12_DG = DG.Exp
+T201h65r12_DG_raw = DG.Exp_raw
+
+
+load("/DATA/usr/l.dauban/projects/pA-DamID/test_reproducibility/T201h65r21/domainograms.RData")
+T201h65r21 = sDamID.Exp
+T201h65r21_DG = DG.Exp
+T201h65r21_DG_raw = DG.Exp_raw
+
+
+# compute gatc fragment length - code taken from the plot.domainogram function, just take the plotted window and take the mean of the fragment size in that window.
+x.axis.slack=0.04
+xslack<-(w1.4$end-w1.4$start)*x.axis.slack 
+dgsub<-T201h65r12_DG_raw[start(T201h65r12_DG_raw)>=w1.4$start-xslack & end(T201h65r12_DG_raw)<=w1.4$end+xslack] #reduce dg to plotting region
+gatc2len<-mean(width(dgsub))
+gatc2len
+
+# combine the 2 clones
+T201h65r12_DG_raw_2 <- T201h65r12_DG_raw %>% as_tibble() %>% gather(key="window", value = "r12", -c(1:5)) %>% mutate(window = factor(window, levels =c("X301", "X313", "X359", "X413", "X475", "X545", "X627", "X721", "X829", "X955", "X1097", "X1261", "X1451", "X1669", "X1919", "X2207", "X2537", "X2917")))
+
+T201h65r21_DG_raw_2 <- T201h65r21_DG_raw %>% as_tibble() %>% gather(key="window", value = "r21", -c(1:5)) %>% mutate(window = factor(window, levels =c("X301", "X313", "X359", "X413", "X475", "X545", "X627", "X721", "X829", "X955", "X1097", "X1261", "X1451", "X1669", "X1919", "X2207", "X2537", "X2917"))) 
+
+T201h65r_comb_DG_raw_2 <- right_join(T201h65r12_DG_raw_2, T201h65r21_DG_raw_2)
+
+```
+
+## T201h162
+```{r}
+# load data
+load("/DATA/usr/l.dauban/projects/pA-DamID/test_reproducibility/T201h162r1/domainograms.RData")
+T201h162 = sDamID.Control
+T201h162r1 = sDamID.Exp
+T201h162r1_DG = DG.Exp
+T201h162r1_DG_raw = DG.Exp_raw
+
+
+load("/DATA/usr/l.dauban/projects/pA-DamID/test_reproducibility/T201h162r6/domainograms.RData")
+T201h162r6 = sDamID.Exp
+T201h162r6_DG = DG.Exp
+T201h162r6_DG_raw = DG.Exp_raw
+
+
+# compute gatc fragment length - code taken from the plot.domainogram function, just take the plotted window and take the mean of the fragment size in that window.
+x.axis.slack=0.04
+xslack<-(w1.4$end-w1.4$start)*x.axis.slack 
+dgsub<-T201h162r1_DG_raw[start(T201h162r1_DG_raw)>=w1.4$start-xslack & end(T201h162r1_DG_raw)<=w1.4$end+xslack] #reduce dg to plotting region
+gatc2len<-mean(width(dgsub))
+gatc2len
+
+# combine the 2 clones
+T201h162r1_DG_raw_2 <- T201h162r1_DG_raw %>% as_tibble() %>% gather(key="window", value = "r1", -c(1:5)) %>% mutate(window = factor(window, levels =c("X301", "X313", "X359", "X413", "X475", "X545", "X627", "X721", "X829", "X955", "X1097", "X1261", "X1451", "X1669", "X1919", "X2207", "X2537", "X2917")))
+
+T201h162r6_DG_raw_2 <- T201h162r6_DG_raw %>% as_tibble() %>% gather(key="window", value = "r6", -c(1:5)) %>% mutate(window = factor(window, levels =c("X301", "X313", "X359", "X413", "X475", "X545", "X627", "X721", "X829", "X955", "X1097", "X1261", "X1451", "X1669", "X1919", "X2207", "X2537", "X2917"))) 
+
+T201h162r_comb_DG_raw_2 <- right_join(T201h162r1_DG_raw_2, T201h162r6_DG_raw_2)
+
+```
+
+## T201h24
+```{r}
+# load data
+load("/DATA/usr/l.dauban/projects/pA-DamID/test_reproducibility/T201h24r2/domainograms.RData")
+T201h24 = sDamID.Control
+T201h24r2 = sDamID.Exp
+T201h24r2_DG = DG.Exp
+T201h24r2_DG_raw = DG.Exp_raw
+
+
+load("/DATA/usr/l.dauban/projects/pA-DamID/test_reproducibility/T201h24r11/domainograms.RData")
+T201h24r11 = sDamID.Exp
+T201h24r11_DG = DG.Exp
+T201h24r11_DG_raw = DG.Exp_raw
+
+
+# compute gatc fragment length - code taken from the plot.domainogram function, just take the plotted window and take the mean of the fragment size in that window.
+x.axis.slack=0.04
+xslack<-(w1.4$end-w1.4$start)*x.axis.slack 
+dgsub<-T201h24r2_DG_raw[start(T201h24r2_DG_raw)>=w1.4$start-xslack & end(T201h24r2_DG_raw)<=w1.4$end+xslack] #reduce dg to plotting region
+gatc2len<-mean(width(dgsub))
+gatc2len
+
+# combine the 2 clones
+T201h24r2_DG_raw_2 <- T201h24r2_DG_raw %>% as_tibble() %>% gather(key="window", value = "r2", -c(1:5)) %>% mutate(window = factor(window, levels =c("X301", "X313", "X359", "X413", "X475", "X545", "X627", "X721", "X829", "X955", "X1097", "X1261", "X1451", "X1669", "X1919", "X2207", "X2537", "X2917")))
+
+T201h24r11_DG_raw_2 <- T201h24r11_DG_raw %>% as_tibble() %>% gather(key="window", value = "r11", -c(1:5)) %>% mutate(window = factor(window, levels =c("X301", "X313", "X359", "X413", "X475", "X545", "X627", "X721", "X829", "X955", "X1097", "X1261", "X1451", "X1669", "X1919", "X2207", "X2537", "X2917"))) 
+
+T201h24r_comb_DG_raw_2 <- right_join(T201h24r2_DG_raw_2, T201h24r11_DG_raw_2)
+
+```
+
+## T48h20
+```{r}
+# load data
+load("/DATA/usr/l.dauban/projects/pA-DamID/test_reproducibility/T48h20r8/domainograms.RData")
+T48h20 = sDamID.Control
+T48h20r8 = sDamID.Exp
+T48h20r8_DG = DG.Exp
+T48h20r8_DG_raw = DG.Exp_raw
+
+
+load("/DATA/usr/l.dauban/projects/pA-DamID/test_reproducibility/T48h20r16/domainograms.RData")
+T48h20r16 = sDamID.Exp
+T48h20r16_DG = DG.Exp
+T48h20r16_DG_raw = DG.Exp_raw
+
+
+# compute gatc fragment length - code taken from the plot.domainogram function, just take the plotted window and take the mean of the fragment size in that window.
+x.axis.slack=0.04
+xslack<-(w1.4$end-w1.4$start)*x.axis.slack 
+dgsub<-T48h20r16_DG_raw[start(T48h20r16_DG_raw)>=w1.4$start-xslack & end(T48h20r16_DG_raw)<=w1.4$end+xslack] #reduce dg to plotting region
+gatc2len<-mean(width(dgsub))
+gatc2len
+
+
+# combine the 2 clones
+T48h20r8_DG_raw_2 <- T48h20r8_DG_raw %>% as_tibble() %>% gather(key="window", value = "r8", -c(1:5)) %>% mutate(window = factor(window, levels =c("X301", "X313", "X359", "X413", "X475", "X545", "X627", "X721", "X829", "X955", "X1097", "X1261", "X1451", "X1669", "X1919", "X2207", "X2537", "X2917")))
+
+T48h20r16_DG_raw_2 <- T48h20r16_DG_raw %>% as_tibble() %>% gather(key="window", value = "r16", -c(1:5)) %>% mutate(window = factor(window, levels =c("X301", "X313", "X359", "X413", "X475", "X545", "X627", "X721", "X829", "X955", "X1097", "X1261", "X1451", "X1669", "X1919", "X2207", "X2537", "X2917")))
+
+T48h20r_comb_DG_raw_2 <- right_join(T48h20r8_DG_raw_2, T48h20r16_DG_raw_2)
+
+```
+
+## T201h49
+```{r}
+# load data
+load("/DATA/usr/l.dauban/projects/pA-DamID/test_reproducibility/T201h49r7_LB1/domainograms.RData")
+T201h49 = sDamID.Control
+T201h49r7 = sDamID.Exp
+T201h49r7_DG = DG.Exp
+T201h49r7_DG_raw = DG.Exp_raw
+
+
+load("/DATA/usr/l.dauban/projects/pA-DamID/test_reproducibility/T201h49r12_LB1/domainograms.RData")
+T201h49r12 = sDamID.Exp
+T201h49r12_DG = DG.Exp
+T201h49r12_DG_raw = DG.Exp_raw
+
+
+# compute gatc fragment length - code taken from the plot.domainogram function, just take the plotted window and take the mean of the fragment size in that window.
+x.axis.slack=0.04
+xslack<-(w1.4$end-w1.4$start)*x.axis.slack 
+dgsub<-T201h49r12_DG_raw[start(T201h49r12_DG_raw)>=w1.4$start-xslack & end(T201h49r12_DG_raw)<=w1.4$end+xslack] #reduce dg to plotting region
+gatc2len<-mean(width(dgsub))
+gatc2len
+
+
+# combine the 2 clones
+T201h49r7_DG_raw_2 <- T201h49r7_DG_raw %>% as_tibble() %>% gather(key="window", value = "r7", -c(1:5)) %>% mutate(window = factor(window, levels =c("X301", "X313", "X359", "X413", "X475", "X545", "X627", "X721", "X829", "X955", "X1097", "X1261", "X1451", "X1669", "X1919", "X2207", "X2537", "X2917")))
+
+T201h49r12_DG_raw_2 <- T201h49r12_DG_raw %>% as_tibble() %>% gather(key="window", value = "r12", -c(1:5)) %>% mutate(window = factor(window, levels =c("X301", "X313", "X359", "X413", "X475", "X545", "X627", "X721", "X829", "X955", "X1097", "X1261", "X1451", "X1669", "X1919", "X2207", "X2537", "X2917")))
+
+T201h49r_comb_DG_raw_2 <- right_join(T201h49r7_DG_raw_2, T201h49r12_DG_raw_2)
+
+```
+
+## T201h51 
+```{r}
+# load data
+load("/DATA/usr/l.dauban/projects/pA-DamID/test_reproducibility/T201h51r58/domainograms.RData")
+T201h51 = sDamID.Control
+T201h51r58 = sDamID.Exp
+T201h51r58_DG = DG.Exp
+T201h51r58_DG_raw = DG.Exp_raw
+
+
+load("/DATA/usr/l.dauban/projects/pA-DamID/test_reproducibility/T201h51r62/domainograms.RData")
+T201h51r62 = sDamID.Exp
+T201h51r62_DG = DG.Exp
+T201h51r62_DG_raw = DG.Exp_raw
+
+
+# compute gatc fragment length - code taken from the plot.domainogram function, just take the plotted window and take the mean of the fragment size in that window.
+x.axis.slack=0.04
+xslack<-(w2.4$end-w2.4$start)*x.axis.slack 
+dgsub<-T201h51r62_DG_raw[start(T201h51r62_DG_raw)>=w2.4$start-xslack & end(T201h51r62_DG_raw)<=w2.4$end+xslack] #reduce dg to plotting region
+gatc2len<-mean(width(dgsub))
+gatc2len
+
+
+# combine the 2 clones
+T201h51r58_DG_raw_2 <- T201h51r58_DG_raw %>% as_tibble() %>% gather(key="window", value = "r58", -c(1:5)) %>% mutate(window = factor(window, levels =c("X301", "X313", "X359", "X413", "X475", "X545", "X627", "X721", "X829", "X955", "X1097", "X1261", "X1451", "X1669", "X1919", "X2207", "X2537", "X2917")))
+
+T201h51r62_DG_raw_2 <- T201h51r62_DG_raw %>% as_tibble() %>% gather(key="window", value = "r62", -c(1:5)) %>% mutate(window = factor(window, levels =c("X301", "X313", "X359", "X413", "X475", "X545", "X627", "X721", "X829", "X955", "X1097", "X1261", "X1451", "X1669", "X1919", "X2207", "X2537", "X2917")))
+
+T201h51r_comb_DG_raw_2 <- right_join(T201h51r58_DG_raw_2, T201h51r62_DG_raw_2)
+
+```
+
+## T201h143
+```{r}
+# load data
+load("/DATA/usr/l.dauban/projects/pA-DamID/test_reproducibility/T201h143r12_LB1/domainograms.RData")
+T201h143 = sDamID.Control
+T201h143r12 = sDamID.Exp
+T201h143r12_DG = DG.Exp
+T201h143r12_DG_raw = DG.Exp_raw
+
+
+load("/DATA/usr/l.dauban/projects/pA-DamID/test_reproducibility/T201h143r14_LB1/domainograms.RData")
+T201h143r14 = sDamID.Exp
+T201h143r14_DG = DG.Exp
+T201h143r14_DG_raw = DG.Exp_raw
+
+
+# compute gatc fragment length - code taken from the plot.domainogram function, just take the plotted window and take the mean of the fragment size in that window.
+x.axis.slack=0.04
+xslack<-(w2.4$end-w2.4$start)*x.axis.slack 
+dgsub<-T201h143r14_DG_raw[start(T201h143r14_DG_raw)>=w2.4$start-xslack & end(T201h143r14_DG_raw)<=w2.4$end+xslack] #reduce dg to plotting region
+gatc2len<-mean(width(dgsub))
+gatc2len
+
+
+# combine the 2 clones
+T201h143r12_DG_raw_2 <- T201h143r12_DG_raw %>% as_tibble() %>% gather(key="window", value = "r12", -c(1:5)) %>% mutate(window = factor(window, levels =c("X301", "X313", "X359", "X413", "X475", "X545", "X627", "X721", "X829", "X955", "X1097", "X1261", "X1451", "X1669", "X1919", "X2207", "X2537", "X2917")))
+
+T201h143r14_DG_raw_2 <- T201h143r14_DG_raw %>% as_tibble() %>% gather(key="window", value = "r14", -c(1:5)) %>% mutate(window = factor(window, levels =c("X301", "X313", "X359", "X413", "X475", "X545", "X627", "X721", "X829", "X955", "X1097", "X1261", "X1451", "X1669", "X1919", "X2207", "X2537", "X2917")))
+
+T201h143r_comb_DG_raw_2 <- right_join(T201h143r12_DG_raw_2, T201h143r14_DG_raw_2)
+
+```
+
+## T48h81
+```{r}
+# load data
+load("/DATA/usr/l.dauban/projects/pA-DamID/test_reproducibility/T48h81r18/domainograms.RData")
+T48h81 = sDamID.Control
+T48h81r18 = sDamID.Exp
+T48h81r18_DG = DG.Exp
+T48h81r18_DG_raw = DG.Exp_raw
+
+
+load("/DATA/usr/l.dauban/projects/pA-DamID/test_reproducibility/T48h81r33/domainograms.RData")
+T48h81r33 = sDamID.Exp
+T48h81r33_DG = DG.Exp
+T48h81r33_DG_raw = DG.Exp_raw
+
+
+# compute gatc fragment length - code taken from the plot.domainogram function, just take the plotted window and take the mean of the fragment size in that window.
+x.axis.slack=0.04
+xslack<-(w3.4$end-w3.4$start)*x.axis.slack 
+dgsub<-T48h81r33_DG_raw[start(T48h81r33_DG_raw)>=w3.4$start-xslack & end(T48h81r33_DG_raw)<=w3.4$end+xslack] #reduce dg to plotting region
+gatc2len<-mean(width(dgsub))
+gatc2len
+
+
+# combine the 2 clones
+T48h81r18_DG_raw_2 <- T48h81r18_DG_raw %>% as_tibble() %>% gather(key="window", value = "r18", -c(1:5)) %>% mutate(window = factor(window, levels =c("X301", "X313", "X359", "X413", "X475", "X545", "X627", "X721", "X829", "X955", "X1097", "X1261", "X1451", "X1669", "X1919", "X2207", "X2537", "X2917")))
+
+T48h81r33_DG_raw_2 <- T48h81r33_DG_raw %>% as_tibble() %>% gather(key="window", value = "r33", -c(1:5)) %>% mutate(window = factor(window, levels =c("X301", "X313", "X359", "X413", "X475", "X545", "X627", "X721", "X829", "X955", "X1097", "X1261", "X1451", "X1669", "X1919", "X2207", "X2537", "X2917")))
+
+T48h81r_comb_DG_raw_2 <- right_join(T48h81r18_DG_raw_2, T48h81r33_DG_raw_2)
+
+```
+
+## T3
+```{r}
+# load data
+load("/DATA/usr/l.dauban/projects/pA-DamID/test_reproducibility/T3r6_LB1/domainograms.RData")
+T3 = sDamID.Control
+T3r6 = sDamID.Exp
+T3r6_DG = DG.Exp
+T3r6_DG_raw = DG.Exp_raw
+
+
+load("/DATA/usr/l.dauban/projects/pA-DamID/test_reproducibility/T3r21_LB1/domainograms.RData")
+T3r21 = sDamID.Exp
+T3r21_DG = DG.Exp
+T3r21_DG_raw = DG.Exp_raw
+
+
+# compute gatc fragment length - code taken from the plot.domainogram function, just take the plotted window and take the mean of the fragment size in that window.
+x.axis.slack=0.04
+xslack<-(w3.4$end-w3.4$start)*x.axis.slack 
+dgsub<-T3r21_DG_raw[start(T3r21_DG_raw)>=w3.4$start-xslack & end(T3r21_DG_raw)<=w3.4$end+xslack] #reduce dg to plotting region
+gatc2len<-mean(width(dgsub))
+gatc2len
+
+
+# combine the 2 clones
+T3r6_DG_raw_2 <- T3r6_DG_raw %>% as_tibble() %>% gather(key="window", value = "r6", -c(1:5)) %>% mutate(window = factor(window, levels =c("X301", "X313", "X359", "X413", "X475", "X545", "X627", "X721", "X829", "X955", "X1097", "X1261", "X1451", "X1669", "X1919", "X2207", "X2537", "X2917")))
+
+T3r21_DG_raw_2 <- T3r21_DG_raw %>% as_tibble() %>% gather(key="window", value = "r21", -c(1:5)) %>% mutate(window = factor(window, levels =c("X301", "X313", "X359", "X413", "X475", "X545", "X627", "X721", "X829", "X955", "X1097", "X1261", "X1451", "X1669", "X1919", "X2207", "X2537", "X2917")))
+
+T3r_comb_DG_raw_2 <- right_join(T3r6_DG_raw_2, T3r21_DG_raw_2)
+
+```
+
+## T3h153
+```{r}
+# load data
+load("/DATA/usr/l.dauban/projects/pA-DamID/test_reproducibility/T3h153r2/domainograms.RData")
+T3h153 = sDamID.Control
+T3h153r2 = sDamID.Exp
+T3h153r2_DG = DG.Exp
+T3h153r2_DG_raw = DG.Exp_raw
+
+
+load("/DATA/usr/l.dauban/projects/pA-DamID/test_reproducibility/T3h153r10/domainograms.RData")
+T3h153r10 = sDamID.Exp
+T3h153r10_DG = DG.Exp
+T3h153r10_DG_raw = DG.Exp_raw
+
+
+# compute gatc fragment length - code taken from the plot.domainogram function, just take the plotted window and take the mean of the fragment size in that window.
+x.axis.slack=0.04
+xslack<-(w3.4$end-w3.4$start)*x.axis.slack 
+dgsub<-T3h153r10_DG_raw[start(T3h153r10_DG_raw)>=w3.4$start-xslack & end(T3h153r10_DG_raw)<=w3.4$end+xslack] #reduce dg to plotting region
+gatc2len<-mean(width(dgsub))
+gatc2len
+
+
+# combine the 2 clones
+T3h153r2_DG_raw_2 <- T3h153r2_DG_raw %>% as_tibble() %>% gather(key="window", value = "r2", -c(1:5)) %>% mutate(window = factor(window, levels =c("X301", "X313", "X359", "X413", "X475", "X545", "X627", "X721", "X829", "X955", "X1097", "X1261", "X1451", "X1669", "X1919", "X2207", "X2537", "X2917")))
+
+T3h153r10_DG_raw_2 <- T3h153r10_DG_raw %>% as_tibble() %>% gather(key="window", value = "r10", -c(1:5)) %>% mutate(window = factor(window, levels =c("X301", "X313", "X359", "X413", "X475", "X545", "X627", "X721", "X829", "X955", "X1097", "X1261", "X1451", "X1669", "X1919", "X2207", "X2537", "X2917")))
+
+T3h153r_comb_DG_raw_2 <- right_join(T3h153r2_DG_raw_2, T3h153r10_DG_raw_2)
+
+```
+
+## ddCas9 - LADnr deletion
+```{r}
+# load data
+load("/DATA/usr/l.dauban/projects/pA-DamID/test_reproducibility/II-cl92/domainograms.RData")
+II_ = sDamID.Control
+II_r92 = sDamID.Exp
+II_r92_DG = DG.Exp
+II_r92_DG_raw = DG.Exp_raw
+
+
+load("/DATA/usr/l.dauban/projects/pA-DamID/test_reproducibility/II-cl165/domainograms.RData")
+II_r165 = sDamID.Exp
+II_r165_DG = DG.Exp
+II_r165_DG_raw = DG.Exp_raw
+
+
+# compute gatc fragment length - code taken from the plot.domainogram function, just take the plotted window and take the mean of the fragment size in that window.
+x.axis.slack=0.04
+xslack<-(w1.4$end-w1.4$start)*x.axis.slack 
+dgsub<-II_r165_DG_raw[start(II_r165_DG_raw)>=w1.4$start-xslack & end(II_r165_DG_raw)<=w1.4$end+xslack] #reduce dg to plotting region
+gatc2len<-mean(width(dgsub))
+gatc2len
+
+
+# combine the 2 clones
+II_r92_DG_raw_2 <- II_r92_DG_raw %>% as_tibble() %>% gather(key="window", value = "r92", -c(1:5)) %>% mutate(window = factor(window, levels =c("X301", "X313", "X359", "X413", "X475", "X545", "X627", "X721", "X829", "X955", "X1097", "X1261", "X1451", "X1669", "X1919", "X2207", "X2537", "X2917")))
+
+II_r165_DG_raw_2 <- II_r165_DG_raw %>% as_tibble() %>% gather(key="window", value = "r165", -c(1:5)) %>% mutate(window = factor(window, levels =c("X301", "X313", "X359", "X413", "X475", "X545", "X627", "X721", "X829", "X955", "X1097", "X1261", "X1451", "X1669", "X1919", "X2207", "X2537", "X2917")))
+
+II_r_comb_DG_raw_2 <- right_join(II_r92_DG_raw_2, II_r165_DG_raw_2)
+
+```
+
+## Pool 3
+```{r}
+# load data
+load("/DATA/usr/l.dauban/projects/pA-DamID/test_reproducibility/Pool3_cl70_against_WT/domainograms.RData")
+pool3_ = sDamID.Control
+pool3_r70 = sDamID.Exp
+pool3_r70_DG = DG.Exp
+pool3_r70_DG_raw = DG.Exp_raw
+
+
+load("/DATA/usr/l.dauban/projects/pA-DamID/test_reproducibility/Pool3_cl83_against_WT/domainograms.RData")
+pool3_r83 = sDamID.Exp
+pool3_r83_DG = DG.Exp
+pool3_r83_DG_raw = DG.Exp_raw
+
+
+# compute gatc fragment length - code taken from the plot.domainogram function, just take the plotted window and take the mean of the fragment size in that window.
+x.axis.slack=0.04
+xslack<-(w1.8$end-w1.8$start)*x.axis.slack 
+dgsub<-pool3_r83_DG_raw[start(pool3_r83_DG_raw)>=w1.8$start-xslack & end(pool3_r83_DG_raw)<=w1.8$end+xslack] #reduce dg to plotting region
+gatc2len<-mean(width(dgsub))
+gatc2len
+
+
+# combine the 2 clones
+pool3_r70_DG_raw_2 <- pool3_r70_DG_raw %>% as_tibble() %>% gather(key="window", value = "r70", -c(1:5)) %>% mutate(window = factor(window, levels =c("X301", "X313", "X359", "X413", "X475", "X545", "X627", "X721", "X829", "X955", "X1097", "X1261", "X1451", "X1669", "X1919", "X2207", "X2537", "X2917")))
+
+pool3_r83_DG_raw_2 <- pool3_r83_DG_raw %>% as_tibble() %>% gather(key="window", value = "r83", -c(1:5)) %>% mutate(window = factor(window, levels =c("X301", "X313", "X359", "X413", "X475", "X545", "X627", "X721", "X829", "X955", "X1097", "X1261", "X1451", "X1669", "X1919", "X2207", "X2537", "X2917")))
+
+pool3_r_comb_DG_raw_2 <- right_join(pool3_r70_DG_raw_2, pool3_r83_DG_raw_2)
+
+```
+
+## Pool 7
+```{r}
+# load data
+load("/DATA/usr/l.dauban/projects/pA-DamID/test_reproducibility/Pool7_cl84_against_WT/domainograms.RData")
+pool7 = sDamID.Control
+pool7_r84 = sDamID.Exp
+pool7_r84_DG = DG.Exp
+pool7_r84_DG_raw = DG.Exp_raw
+
+
+load("/DATA/usr/l.dauban/projects/pA-DamID/test_reproducibility/Pool7_cl127_against_WT/domainograms.RData")
+pool7_r127 = sDamID.Exp
+pool7_r127_DG = DG.Exp
+pool7_r127_DG_raw = DG.Exp_raw
+
+
+# compute gatc fragment length - code taken from the plot.domainogram function, just take the plotted window and take the mean of the fragment size in that window.
+x.axis.slack=0.04
+xslack<-(w1.8$end-w1.8$start)*x.axis.slack 
+dgsub<-pool7_r127_DG_raw[start(pool7_r127_DG_raw)>=w1.8$start-xslack & end(pool7_r127_DG_raw)<=w1.8$end+xslack] #reduce dg to plotting region
+gatc2len<-mean(width(dgsub))
+gatc2len
+
+
+# combine the 2 clones
+pool7_r84_DG_raw_2 <- pool7_r84_DG_raw %>% as_tibble() %>% gather(key="window", value = "r84", -c(1:5)) %>% mutate(window = factor(window, levels =c("X301", "X313", "X359", "X413", "X475", "X545", "X627", "X721", "X829", "X955", "X1097", "X1261", "X1451", "X1669", "X1919", "X2207", "X2537", "X2917")))
+
+pool7_r127_DG_raw_2 <- pool7_r127_DG_raw %>% as_tibble() %>% gather(key="window", value = "r127", -c(1:5)) %>% mutate(window = factor(window, levels =c("X301", "X313", "X359", "X413", "X475", "X545", "X627", "X721", "X829", "X955", "X1097", "X1261", "X1451", "X1669", "X1919", "X2207", "X2537", "X2917")))
+
+pool7_r_comb_DG_raw_2 <- right_join(pool7_r84_DG_raw_2, pool7_r127_DG_raw_2)
+
+```
+
+## T201h49 - H3K9me3
+```{r}
+# load data
+load("/DATA/usr/l.dauban/projects/pA-DamID/test_reproducibility/T201h49r7_H3K9me3/domainograms.RData")
+T201h49_K9me3 = sDamID.Control
+T201h49r7_K9me3 = sDamID.Exp
+T201h49r7_K9me3_DG = DG.Exp
+T201h49r7_K9me3_DG_raw = DG.Exp_raw
+
+
+load("/DATA/usr/l.dauban/projects/pA-DamID/test_reproducibility/T201h49r12_H3K9me3/domainograms.RData")
+T201h49r12_K9me3 = sDamID.Exp
+T201h49r12_K9me3_DG = DG.Exp
+T201h49r12_K9me3_DG_raw = DG.Exp_raw
+
+
+# compute gatc fragment length - code taken from the plot.domainogram function, just take the plotted window and take the mean of the fragment size in that window.
+x.axis.slack=0.04
+xslack<-(w2.4$end-w2.4$start)*x.axis.slack 
+dgsub<-T201h49r7_K9me3_DG_raw[start(T201h49r7_K9me3_DG_raw)>=w2.4$start-xslack & end(T201h49r7_K9me3_DG_raw)<=w2.4$end+xslack] #reduce dg to plotting region
+gatc2len<-mean(width(dgsub))
+gatc2len
+
+
+# combine the 2 clones
+T201h49r7_K9me3_DG_raw_2 <- T201h49r7_K9me3_DG_raw %>% as_tibble() %>% gather(key="window", value = "r7", -c(1:5)) %>% mutate(window = factor(window, levels =c("X301", "X313", "X359", "X413", "X475", "X545", "X627", "X721", "X829", "X955", "X1097", "X1261", "X1451", "X1669", "X1919", "X2207", "X2537", "X2917")))
+
+T201h49r12_K9me3_DG_raw_2 <- T201h49r12_K9me3_DG_raw %>% as_tibble() %>% gather(key="window", value = "r12", -c(1:5)) %>% mutate(window = factor(window, levels =c("X301", "X313", "X359", "X413", "X475", "X545", "X627", "X721", "X829", "X955", "X1097", "X1261", "X1451", "X1669", "X1919", "X2207", "X2537", "X2917")))
+
+T201h49r_K9me3_r_comb_DG_raw_2 <- right_join(T201h49r7_K9me3_DG_raw_2, T201h49r12_K9me3_DG_raw_2)
+
+```
+
+## Chop Pool 1
+```{r}
+# load data
+load("/DATA/usr/l.dauban/projects/pA-DamID/test_reproducibility/cl83_p1_cl93_smth_151/domainograms.RData")
+cl83_p1 = sDamID.Control
+cl83_p1_cl93 = sDamID.Exp
+cl83_p1_cl93_DG = DG.Exp
+cl83_p1_cl93_DG_raw = DG.Exp_raw
+
+
+load("/DATA/usr/l.dauban/projects/pA-DamID/test_reproducibility/cl83_p1_cl96_smth_151/domainograms.RData")
+cl83_p1_cl96 = sDamID.Exp
+cl83_p1_cl96_DG = DG.Exp
+cl83_p1_cl96_DG_raw = DG.Exp_raw
+
+
+# compute gatc fragment length - code taken from the plot.domainogram function, just take the plotted window and take the mean of the fragment size in that window.
+x.axis.slack=0.04
+xslack<-(w06.45$end-w06.45$start)*x.axis.slack 
+dgsub<-pool7_r127_DG_raw[start(pool7_r127_DG_raw)>=w06.45$start-xslack & end(pool7_r127_DG_raw)<=w06.45$end+xslack] #reduce dg to plotting region
+gatc2len<-mean(width(dgsub))
+gatc2len
+
+
+# combine the 2 clones
+cl83_p1_cl93_DG_2 <- cl83_p1_cl93_DG %>% as_tibble() %>% gather(key="window", value = "r93", -c(1:5)) %>% mutate(window = factor(window, levels =c("X151", "X155", "X179", "X205", "X237", "X271","X313", "X359", "X413", "X475", "X545", "X627", "X721", "X829", "X955", "X1097", "X1261", "X1451", "X1669", "X1919", "X2207", "X2537", "X2917")))
+
+cl83_p1_cl96_DG_2 <- cl83_p1_cl96_DG %>% as_tibble() %>% gather(key="window", value = "r96", -c(1:5)) %>% mutate(window = factor(window, levels =c("X151", "X155", "X179", "X205", "X237", "X271","X313", "X359", "X413", "X475", "X545", "X627", "X721", "X829", "X955", "X1097", "X1261", "X1451", "X1669", "X1919", "X2207", "X2537", "X2917")))
+
+cl83_p1_comb_DG_raw_2 <- right_join(cl83_p1_cl93_DG_2, cl83_p1_cl96_DG_2)
+
+```
+
+## Chop Pool 2
+```{r}
+# load data
+load("/DATA/usr/l.dauban/projects/pA-DamID/test_reproducibility/cl83_p2_cl13_smth_151/domainograms.RData")
+cl83_p2 = sDamID.Control
+cl83_p2_cl13 = sDamID.Exp
+cl83_p2_cl13_DG = DG.Exp
+cl83_p2_cl13_DG_raw = DG.Exp_raw
+
+
+load("/DATA/usr/l.dauban/projects/pA-DamID/test_reproducibility/cl83_p2_cl68_smth_151/domainograms.RData")
+cl83_p2_cl68 = sDamID.Exp
+cl83_p2_cl68_DG = DG.Exp
+cl83_p2_cl68_DG_raw = DG.Exp_raw
+
+
+# compute gatc fragment length - code taken from the plot.domainogram function, just take the plotted window and take the mean of the fragment size in that window.
+x.axis.slack=0.04
+xslack<-(w06.45$end-w06.45$start)*x.axis.slack 
+dgsub<-pool7_r127_DG_raw[start(pool7_r127_DG_raw)>=w06.45$start-xslack & end(pool7_r127_DG_raw)<=w06.45$end+xslack] #reduce dg to plotting region
+gatc2len<-mean(width(dgsub))
+gatc2len
+
+
+# combine the 2 clones
+cl83_p2_cl13_DG_2 <- cl83_p2_cl13_DG %>% as_tibble() %>% gather(key="window", value = "r13", -c(1:5)) %>% mutate(window = factor(window, levels =c("X151", "X155", "X179", "X205", "X237", "X271","X313", "X359", "X413", "X475", "X545", "X627", "X721", "X829", "X955", "X1097", "X1261", "X1451", "X1669", "X1919", "X2207", "X2537", "X2917")))
+
+cl83_p2_cl68_DG_2 <- cl83_p2_cl68_DG %>% as_tibble() %>% gather(key="window", value = "r68", -c(1:5)) %>% mutate(window = factor(window, levels =c("X151", "X155", "X179", "X205", "X237", "X271","X313", "X359", "X413", "X475", "X545", "X627", "X721", "X829", "X955", "X1097", "X1261", "X1451", "X1669", "X1919", "X2207", "X2537", "X2917")))
+
+cl83_p2_comb_DG_raw_2 <- right_join(cl83_p2_cl13_DG_2, cl83_p2_cl68_DG_2)
+
+```
+
+## Chop Pool 3
+```{r}
+# load data
+load("/DATA/usr/l.dauban/projects/pA-DamID/test_reproducibility/cl83_p3_cl21_smth_51/domainograms.RData")
+cl83_p3 = sDamID.Control
+cl83_p3_cl21 = sDamID.Exp
+cl83_p3_cl21_DG = DG.Exp
+cl83_p3_cl21_DG_raw = DG.Exp_raw
+
+
+load("/DATA/usr/l.dauban/projects/pA-DamID/test_reproducibility/cl83_p3_cl26_smth_51/domainograms.RData")
+cl83_p3_cl26 = sDamID.Exp
+cl83_p3_cl26_DG = DG.Exp
+cl83_p3_cl26_DG_raw = DG.Exp_raw
+
+
+# compute gatc fragment length - code taken from the plot.domainogram function, just take the plotted window and take the mean of the fragment size in that window.
+x.axis.slack=0.04
+xslack<-(w06.45$end-w06.45$start)*x.axis.slack 
+dgsub<-pool7_r127_DG_raw[start(pool7_r127_DG_raw)>=w06.45$start-xslack & end(pool7_r127_DG_raw)<=w06.45$end+xslack] #reduce dg to plotting region
+gatc2len<-mean(width(dgsub))
+gatc2len
+
+
+# combine the 2 clones
+cl83_p3_cl21_DG_2 <- cl83_p3_cl21_DG %>% as_tibble() %>% gather(key="window", value = "r21", -c(1:5)) %>% mutate(window = factor(window, levels =c("X51", "X77", "X89", "X103", "X117", "X135", "X155", "X179", "X205", "X237", "X271","X313", "X359", "X413", "X475", "X545", "X627", "X721", "X829", "X955", "X1097", "X1261", "X1451", "X1669", "X1919", "X2207", "X2537", "X2917")))
+
+cl83_p3_cl26_DG_2 <- cl83_p3_cl26_DG %>% as_tibble() %>% gather(key="window", value = "r26", -c(1:5)) %>% mutate(window = factor(window, levels =c("X51", "X77", "X89", "X103", "X117", "X135", "X155", "X179", "X205", "X237", "X271","X313", "X359", "X413", "X475", "X545", "X627", "X721", "X829", "X955", "X1097", "X1261", "X1451", "X1669", "X1919", "X2207", "X2537", "X2917")))
+
+cl83_p3_comb_DG_raw_2 <- right_join(cl83_p3_cl21_DG_2, cl83_p3_cl26_DG_2)
+
+```
+
+## Chop Pool 4
+```{r}
+# load data
+load("/DATA/usr/l.dauban/projects/pA-DamID/test_reproducibility/cl83_p4_cl11_smth_51/domainograms.RData")
+cl83_p4 = sDamID.Control
+cl83_p4_cl11 = sDamID.Exp
+cl83_p4_cl11_DG = DG.Exp
+cl83_p4_cl11_DG_raw = DG.Exp_raw
+
+
+load("/DATA/usr/l.dauban/projects/pA-DamID/test_reproducibility/cl83_p4_cl26_smth_51/domainograms.RData")
+cl83_p4_cl26 = sDamID.Exp
+cl83_p4_cl26_DG = DG.Exp
+cl83_p4_cl26_DG_raw = DG.Exp_raw
+
+
+# compute gatc fragment length - code taken from the plot.domainogram function, just take the plotted window and take the mean of the fragment size in that window.
+x.axis.slack=0.04
+xslack<-(w06.45$end-w06.45$start)*x.axis.slack 
+dgsub<-pool7_r127_DG_raw[start(pool7_r127_DG_raw)>=w06.45$start-xslack & end(pool7_r127_DG_raw)<=w06.45$end+xslack] #reduce dg to plotting region
+gatc2len<-mean(width(dgsub))
+gatc2len
+
+
+# combine the 2 clones
+cl83_p4_cl11_DG_2 <- cl83_p4_cl11_DG %>% as_tibble() %>% gather(key="window", value = "r11", -c(1:5)) %>% mutate(window = factor(window, levels =c("X51", "X77", "X89", "X103", "X117", "X135", "X155", "X179", "X205", "X237", "X271","X313", "X359", "X413", "X475", "X545", "X627", "X721", "X829", "X955", "X1097", "X1261", "X1451", "X1669", "X1919", "X2207", "X2537", "X2917")))
+
+cl83_p4_cl26_DG_2 <- cl83_p4_cl26_DG %>% as_tibble() %>% gather(key="window", value = "r26", -c(1:5)) %>% mutate(window = factor(window, levels =c("X51", "X77", "X89", "X103", "X117", "X135", "X155", "X179", "X205", "X237", "X271","X313", "X359", "X413", "X475", "X545", "X627", "X721", "X829", "X955", "X1097", "X1261", "X1451", "X1669", "X1919", "X2207", "X2537", "X2917")))
+
+cl83_p4_comb_DG_raw_2 <- right_join(cl83_p4_cl11_DG_2, cl83_p4_cl26_DG_2)
+
+```
+
+## Chop Pool 5
+```{r}
+# load data
+load("/DATA/usr/l.dauban/projects/pA-DamID/test_reproducibility/cl83_p5_cl9_smth_201/domainograms.RData")
+cl83_p5 = sDamID.Control
+cl83_p5_cl9 = sDamID.Exp
+cl83_p5_cl9_DG = DG.Exp
+cl83_p5_cl9_DG_raw = DG.Exp_raw
+
+
+load("/DATA/usr/l.dauban/projects/pA-DamID/test_reproducibility/cl83_p5_cl36_smth_201/domainograms.RData")
+cl83_p5_cl36 = sDamID.Exp
+cl83_p5_cl36_DG = DG.Exp
+cl83_p5_cl36_DG_raw = DG.Exp_raw
+
+
+# compute gatc fragment length - code taken from the plot.domainogram function, just take the plotted window and take the mean of the fragment size in that window.
+x.axis.slack=0.04
+xslack<-(w06.45$end-w06.45$start)*x.axis.slack 
+dgsub<-pool7_r127_DG_raw[start(pool7_r127_DG_raw)>=w06.45$start-xslack & end(pool7_r127_DG_raw)<=w06.45$end+xslack] #reduce dg to plotting region
+gatc2len<-mean(width(dgsub))
+gatc2len
+
+
+# combine the 2 clones
+cl83_p5_cl9_DG_2 <- cl83_p5_cl9_DG %>% as_tibble() %>% gather(key="window", value = "r9", -c(1:5)) %>% mutate(window = factor(window, levels =c("X201", "X205", "X237", "X271","X313", "X359", "X413", "X475", "X545", "X627", "X721", "X829", "X955", "X1097", "X1261", "X1451", "X1669", "X1919", "X2207", "X2537", "X2917")))
+
+cl83_p5_cl36_DG_2 <- cl83_p5_cl36_DG %>% as_tibble() %>% gather(key="window", value = "r36", -c(1:5)) %>% mutate(window = factor(window, levels =c("X201", "X205", "X237", "X271","X313", "X359", "X413", "X475", "X545", "X627", "X721", "X829", "X955", "X1097", "X1261", "X1451", "X1669", "X1919", "X2207", "X2537", "X2917")))
+
+cl83_p5_comb_DG_raw_2 <- right_join(cl83_p5_cl9_DG_2, cl83_p5_cl36_DG_2)
+
+```
+
+## Chop Pool 6
+```{r}
+# load data
+load("/DATA/usr/l.dauban/projects/pA-DamID/test_reproducibility/cl83_p6_cl2_smth_201/domainograms.RData")
+cl83_p6 = sDamID.Control
+cl83_p6_cl2 = sDamID.Exp
+cl83_p6_cl2_DG = DG.Exp
+cl83_p6_cl2_DG_raw = DG.Exp_raw
+
+
+load("/DATA/usr/l.dauban/projects/pA-DamID/test_reproducibility/cl83_p6_cl18_smth_201/domainograms.RData")
+cl83_p6_cl18 = sDamID.Exp
+cl83_p6_cl18_DG = DG.Exp
+cl83_p6_cl18_DG_raw = DG.Exp_raw
+
+
+# compute gatc fragment length - code taken from the plot.domainogram function, just take the plotted window and take the mean of the fragment size in that window.
+x.axis.slack=0.04
+xslack<-(w06.45$end-w06.45$start)*x.axis.slack 
+dgsub<-pool7_r127_DG_raw[start(pool7_r127_DG_raw)>=w06.45$start-xslack & end(pool7_r127_DG_raw)<=w06.45$end+xslack] #reduce dg to plotting region
+gatc2len<-mean(width(dgsub))
+gatc2len
+
+
+# combine the 2 clones
+cl83_p6_cl2_DG_2 <- cl83_p6_cl2_DG %>% as_tibble() %>% gather(key="window", value = "r2", -c(1:5)) %>% mutate(window = factor(window, levels =c("X201", "X205", "X237", "X271","X313", "X359", "X413", "X475", "X545", "X627", "X721", "X829", "X955", "X1097", "X1261", "X1451", "X1669", "X1919", "X2207", "X2537", "X2917")))
+
+cl83_p6_cl18_DG_2 <- cl83_p6_cl18_DG %>% as_tibble() %>% gather(key="window", value = "r18", -c(1:5)) %>% mutate(window = factor(window, levels =c("X201", "X205", "X237", "X271","X313", "X359", "X413", "X475", "X545", "X627", "X721", "X829", "X955", "X1097", "X1261", "X1451", "X1669", "X1919", "X2207", "X2537", "X2917")))
+
+cl83_p6_comb_DG_raw_2 <- right_join(cl83_p6_cl2_DG_2, cl83_p6_cl18_DG_2)
+
+```
+
+
+
+# One plot to rule them all
+```{r}
+
+T201h179_301_R <- T201h179r_comb_DG_raw_2 %>% filter(r28!=2 & r29!=2) %>% filter(start>w1.4$start & start<w1.4$end) %>% group_by(window) %>% dplyr::summarize(cor(r28, r29)) %>% dplyr::rename(cor=`cor(r28, r29)`) %>% filter(window == "X301") %>% mutate(window = as.numeric(gsub("X", "", window))) %>% rowwise() %>% mutate(window = `window`*gatc2len) %>% mutate(clone = "T201h179")
+
+T201h44_301_R <- T201h44r_comb_DG_raw_2 %>% filter(r3!=2 & r14!=2) %>% filter(start>w1.4$start & start<w1.4$end) %>% group_by(window) %>% dplyr::summarize(cor(r3, r14)) %>% dplyr::rename(cor=`cor(r3, r14)`) %>% filter(window == "X301") %>% mutate(window = as.numeric(gsub("X", "", window))) %>% rowwise() %>% mutate(window = `window`*gatc2len) %>% mutate(clone = "T201h44")
+
+T201h65_301_R <- T201h65r_comb_DG_raw_2 %>% filter(r12!=2 & r21!=2) %>% filter(start>w1.4$start & start<w1.4$end) %>% group_by(window) %>% dplyr::summarize(cor(r12, r21)) %>% dplyr::rename(cor=`cor(r12, r21)`) %>% filter(window == "X301") %>% mutate(window = as.numeric(gsub("X", "", window))) %>% rowwise() %>% mutate(window = `window`*gatc2len) %>% mutate(clone = "T201h65")
+
+T201h162_301_R <- T201h162r_comb_DG_raw_2 %>% filter(r1!=2 & r6!=2) %>% filter(start>w1.4$start & start<w1.4$end) %>% group_by(window) %>% dplyr::summarize(cor(r1, r6)) %>% dplyr::rename(cor=`cor(r1, r6)`) %>% filter(window == "X301") %>% mutate(window = as.numeric(gsub("X", "", window))) %>% rowwise() %>% mutate(window = `window`*gatc2len) %>% mutate(clone = "T201h162")
+
+T201h24_301_R <- T201h24r_comb_DG_raw_2 %>% filter(r2!=2 & r11!=2) %>% filter(start>w1.4$start & start<w1.4$end) %>% group_by(window) %>% dplyr::summarize(cor(r2, r11)) %>% dplyr::rename(cor=`cor(r2, r11)`) %>% filter(window == "X301") %>% mutate(window = as.numeric(gsub("X", "", window))) %>% rowwise() %>% mutate(window = `window`*gatc2len) %>% mutate(clone = "T201h24")
+
+T48h20_301_R <- T48h20r_comb_DG_raw_2 %>% filter(r8!=2 & r16!=2) %>% filter(start>w1.4$start & start<w1.4$end) %>% group_by(window) %>% dplyr::summarize(cor(r8, r16)) %>% dplyr::rename(cor=`cor(r8, r16)`) %>% filter(window == "X301") %>% mutate(window = as.numeric(gsub("X", "", window))) %>% rowwise() %>% mutate(window = `window`*gatc2len) %>% mutate(clone = "T48h20")
+
+T201h49_301_R <- T201h49r_comb_DG_raw_2 %>% filter(r7!=2 & r12!=2) %>% filter(start>w1.4$start & start<w1.4$end) %>% group_by(window) %>% dplyr::summarize(cor(r7, r12)) %>% dplyr::rename(cor=`cor(r7, r12)`) %>% filter(window == "X301") %>% mutate(window = as.numeric(gsub("X", "", window))) %>% rowwise() %>% mutate(window = `window`*gatc2len) %>% mutate(clone = "T201h49")
+
+T201h51_301_R <- T201h51r_comb_DG_raw_2 %>% filter(r58!=2 & r62!=2) %>% filter(start>w2.4$start & start<w2.4$end) %>% group_by(window) %>% dplyr::summarize(cor(r58, r62)) %>% dplyr::rename(cor=`cor(r58, r62)`) %>% filter(window == "X301") %>% mutate(window = as.numeric(gsub("X", "", window))) %>% rowwise() %>% mutate(window = `window`*gatc2len) %>% mutate(clone = "T201h51")
+
+T201h143_301_R <- T201h143r_comb_DG_raw_2 %>% filter(r12!=2 & r14!=2) %>% filter(start>w2.4$start & start<w2.4$end) %>% group_by(window) %>% dplyr::summarize(cor(r12, r14)) %>% dplyr::rename(cor=`cor(r12, r14)`) %>% filter(window == "X301") %>% mutate(window = as.numeric(gsub("X", "", window))) %>% rowwise() %>% mutate(window = `window`*gatc2len) %>% mutate(clone = "T201h143")
+
+T48h81_301_R <- T48h81r_comb_DG_raw_2 %>% filter(r18!=2 & r33!=2) %>% filter(start>w3.4$start & start<w3.4$end) %>% group_by(window) %>% dplyr::summarize(cor(r18, r33)) %>% dplyr::rename(cor=`cor(r18, r33)`) %>% filter(window == "X301") %>% mutate(window = as.numeric(gsub("X", "", window))) %>% rowwise() %>% mutate(window = `window`*gatc2len) %>% mutate(clone = "T48h81")
+
+T3_301_R <- T3r_comb_DG_raw_2 %>% filter(r6!=2 & r21!=2) %>% filter(start>w3.4$start & start<w3.4$end) %>% group_by(window) %>% dplyr::summarize(cor(r6, r21)) %>% dplyr::rename(cor=`cor(r6, r21)`) %>% filter(window == "X301") %>% mutate(window = as.numeric(gsub("X", "", window))) %>% rowwise() %>% mutate(window = `window`*gatc2len) %>% mutate(clone = "T3")
+
+T3h153_301_R <- T3h153r_comb_DG_raw_2 %>% filter(r2!=2 & r10!=2) %>% filter(start>w3.4$start & start<w3.4$end) %>% group_by(window) %>% dplyr::summarize(cor(r2, r10)) %>% dplyr::rename(cor=`cor(r2, r10)`) %>% filter(window == "X301") %>% mutate(window = as.numeric(gsub("X", "", window))) %>% rowwise() %>% mutate(window = `window`*gatc2len) %>% mutate(clone = "T3h153")
+
+II_ddCas9_301_R <- II_r_comb_DG_raw_2 %>% filter(r92!=2 & r165!=2) %>% filter(start>w1.4$start & start<w1.4$end) %>% group_by(window) %>% dplyr::summarize(cor(r92, r165)) %>% dplyr::rename(cor=`cor(r92, r165)`) %>% filter(window == "X301") %>% mutate(window = as.numeric(gsub("X", "", window))) %>% rowwise() %>% mutate(window = `window`*gatc2len) %>% mutate(clone = "II_ddCas9")
+
+pool3_301_R <- pool3_r_comb_DG_raw_2 %>% filter(r70!=2 & r83!=2) %>% filter(start>w1.8$start & start<w1.8$end) %>% group_by(window) %>% dplyr::summarize(cor(r70, r83)) %>% dplyr::rename(cor=`cor(r70, r83)`) %>% filter(window == "X301") %>% mutate(window = as.numeric(gsub("X", "", window))) %>% rowwise() %>% mutate(window = `window`*gatc2len) %>% mutate(clone = "pool3")
+  
+pool7_301_R <- pool7_r_comb_DG_raw_2 %>% filter(r84!=2 & r127!=2) %>% filter(start>w1.8$start & start<w1.8$end) %>% group_by(window) %>% dplyr::summarize(cor(r84, r127)) %>% dplyr::rename(cor=`cor(r84, r127)`) %>% filter(window == "X301") %>% mutate(window = as.numeric(gsub("X", "", window))) %>% rowwise() %>% mutate(window = `window`*gatc2len) %>% mutate(clone = "pool7")
+
+T201h49r_K9me3_301_R <- T201h49r_K9me3_r_comb_DG_raw_2 %>% filter(r7!=2 & r12!=2) %>% filter(start>w2.4$start & start<w2.4$end) %>% group_by(window) %>% dplyr::summarize(cor(r7, r12)) %>% dplyr::rename(cor=`cor(r7, r12)`) %>% filter(window == "X301") %>% mutate(window = as.numeric(gsub("X", "", window))) %>% rowwise() %>% mutate(window = `window`*gatc2len) %>% mutate(clone = "T201h49r_K9me3")
+
+cl83_p1_313_R <- cl83_p1_comb_DG_raw_2 %>% filter(r93!=2 & r96!=2) %>% filter(start>w06.45$start & start<w06.45$end) %>% group_by(window) %>% dplyr::summarize(cor(r93, r96)) %>% dplyr::rename(cor=`cor(r93, r96)`) %>% filter(window == "X313") %>% mutate(window = as.numeric(gsub("X", "", window))) %>% rowwise() %>% mutate(window = `window`*gatc2len) %>% mutate(clone = "cl83_p1")
+
+cl83_p2_313_R <- cl83_p2_comb_DG_raw_2 %>% filter(r13!=2 & r68!=2) %>% filter(start>w06.45$start & start<w06.45$end) %>% group_by(window) %>% dplyr::summarize(cor(r13, r68)) %>% dplyr::rename(cor=`cor(r13, r68)`) %>% filter(window == "X313") %>% mutate(window = as.numeric(gsub("X", "", window))) %>% rowwise() %>% mutate(window = `window`*gatc2len) %>% mutate(clone = "cl83_p2")
+
+cl83_p3_313_R <- cl83_p3_comb_DG_raw_2 %>% filter(r21!=2 & r26!=2) %>% filter(start>w06.45$start & start<w06.45$end) %>% group_by(window) %>% dplyr::summarize(cor(r21, r26)) %>% dplyr::rename(cor=`cor(r21, r26)`) %>% filter(window == "X313") %>% mutate(window = as.numeric(gsub("X", "", window))) %>% rowwise() %>% mutate(window = `window`*gatc2len) %>% mutate(clone = "cl83_p3")
+
+cl83_p4_313_R <- cl83_p4_comb_DG_raw_2 %>% filter(r11!=2 & r26!=2) %>% filter(start>w06.45$start & start<w06.45$end) %>% group_by(window) %>% dplyr::summarize(cor(r11, r26)) %>% dplyr::rename(cor=`cor(r11, r26)`) %>% filter(window == "X313") %>% mutate(window = as.numeric(gsub("X", "", window))) %>% rowwise() %>% mutate(window = `window`*gatc2len) %>% mutate(clone = "cl83_p4")
+
+cl83_p5_313_R <- cl83_p5_comb_DG_raw_2 %>% filter(r9!=2 & r36!=2) %>% filter(start>w06.45$start & start<w06.45$end) %>% group_by(window) %>% dplyr::summarize(cor(r9, r36)) %>% dplyr::rename(cor=`cor(r9, r36)`) %>% filter(window == "X313") %>% mutate(window = as.numeric(gsub("X", "", window))) %>% rowwise() %>% mutate(window = `window`*gatc2len) %>% mutate(clone = "cl83_p5")
+
+cl83_p6_313_R <- cl83_p6_comb_DG_raw_2 %>% filter(r2!=2 & r18!=2) %>% filter(start>w06.45$start & start<w06.45$end) %>% group_by(window) %>% dplyr::summarize(cor(r2, r18)) %>% dplyr::rename(cor=`cor(r2, r18)`) %>% filter(window == "X313") %>% mutate(window = as.numeric(gsub("X", "", window))) %>% rowwise() %>% mutate(window = `window`*gatc2len) %>% mutate(clone = "cl83_p6")
+
+
+comb_301_r <- rbind(T201h179_301_R, T201h44_301_R, T201h65_301_R, T201h162_301_R, T201h24_301_R, T48h20_301_R, T201h49_301_R, T201h51_301_R, T201h143_301_R, T48h81_301_R, T3_301_R, T3h153_301_R, II_ddCas9_301_R, pool3_301_R, pool7_301_R, T201h49r_K9me3_301_R, cl83_p1_313_R, cl83_p2_313_R, cl83_p3_313_R, cl83_p4_313_R, cl83_p5_313_R, cl83_p6_313_R)
+
+
+
+comb_301_r %>% rowwise() %>% mutate(clone = factor(clone, levels = c("T201h179", "T201h44", "T201h65", "T201h162", "T201h24", "T48h20", "T201h49", "T201h51", "T201h143", "T48h81", "T3h153", "T3", "II_ddCas9", "pool3", "pool7", "T201h49r_K9me3", "cl83_p1", "cl83_p2", "cl83_p3", "cl83_p4", "cl83_p5", "cl83_p6"))) %>% ggplot(aes(x=cor, y=reorder(clone, -cor), fill = clone))+
+  geom_col(size=1, width = 0.8)+
+  scale_fill_manual(values = c("#C0D4E6", "#9EBCDA", "#8C96C5", "#8C6BAF", "#884299", "#7E277B", "#D967A7", "#E72A8A", "#CE1D58", "#971A46", "#996666", "#660821", "gray", "gray", "gray", "#00994F", "#68BFC3", "#88CCCE", "#A8D8D8", "#C5E4E1", "#2999A9", "#49ABB6"), limits = c("T201h179", "T201h44", "T201h65", "T201h162", "T201h24", "T48h20", "T201h49", "T201h51", "T201h143", "T48h81", "T3h153", "T3", "II_ddCas9", "pool3", "pool7", "T201h49r_K9me3", "cl83_p1", "cl83_p2", "cl83_p3", "cl83_p4", "cl83_p5", "cl83_p6"))+
+  scale_x_continuous(limits = c(0, 1), breaks = c(0, 0.2, 0.4, 0.6, 0.8, 1))+
+  labs(x = "clone-clone correlation",
+       y = "")+
+  theme_bw()+
+  theme(legend.position = "none")
+
+ggsave("SuppFig4A_LD20241230_Reproducibility.pdf", path = "./output/", height = 12, width = 15)
+
+```
+
+
+
+
+

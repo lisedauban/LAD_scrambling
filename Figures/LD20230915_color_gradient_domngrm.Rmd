@@ -1,0 +1,77 @@
+---
+title: "LD20230915_color_gradient_domngrm"
+date: "2023-09-18"
+output: 
+  html_document:
+    theme: journal #cerulean
+    highlight: monochrome
+    toc: true
+    toc_float: true
+    code_folding: show
+  editor_options:
+    chunk_output_type: console
+---
+
+Here I am making the gradient for the legend of the domainograms.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load libraries
+```{r}
+library(dplyr)
+library(tidyverse)
+library(GenomicRanges)
+library(rtracklayer)
+library(RColorBrewer)
+library(plyranges)
+library(ggplot2)
+library(ggbeeswarm)
+library(ggsignif)
+
+```
+
+
+# color gradient for domainogram
+```{r}
+
+y = data.frame(values = seq(0, 1, 0.005))
+
+ggplot(y, aes(x=values, y = '', fill=values))+
+  geom_tile()+
+  #scale_fill_manual(palette = a)+
+  scale_fill_gradientn(colours = c(rev(brewer.pal(9, "Blues")), rep("#FFFFFF",180), brewer.pal(9, "Reds")))+
+  theme_bw()+
+  scale_x_cut(breaks=c(0.15, 0.85), which=c(2), scales=c(0.1))+
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        text = element_text(size = 25))
+  
+ggsave("color.pdf", height = 2, width = 5)
+
+
+a = c(brewer.pal(9, "Reds"), rep("#FFFFFF",180), brewer.pal(9, "Blues"))
+
+
+
+ggplot(y, aes(x=values, y = '', fill=values))+
+  geom_tile()+
+  #scale_fill_manual(palette = a)+
+  scale_fill_gradientn(colours = c(rev(brewer.pal(9, "Blues")), rep("#FFFFFF",180), brewer.pal(9, "Greens")))+
+  theme_bw()+
+  scale_x_cut(breaks=c(0.15, 0.85), which=c(2), scales=c(0.1))+
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        text = element_text(size = 25))
+  
+ggsave("color_green.pdf", height = 2, width = 5)
+
+
+
+
+```
