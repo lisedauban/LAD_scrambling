@@ -27,9 +27,9 @@ For the sake of clarity we simplified the recombination nomenclature in the manu
 * pool4 -> R2-3 isolation in an iLAD environment
 * pool7 -> R4-5 isolation close to LAD4
 * pool8 -> R2-3 isolation close to LAD4
+* pool5 -> t1
+* pool6 -> t2
 * pool1 -> t3
 * pool2 -> t4
 * pool3 -> t5
 * pool4 -> t6
-* pool5 -> t1
-* pool6 -> t2
