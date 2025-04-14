@@ -641,7 +641,7 @@ ggsave("SuppFig13G_LD20230815_T3h153r10_LB1_diff.pdf", path = "./output/", heigh
 ```
 
 
-# Figure Supp 13H - H3K9me3 size
+# Figure Supp 13I - H3K9me3 size
 ```{r}
 # Load data
 LADs <- read.table("/DATA/usr/l.dauban/projects/pA-DamID/E2063_rec_clones_T3_T201h49_T201h143_1_LB1_K9me2/2nd_round/results_mm10_nextseq_strainspecific/HMM/bin-25kb/T201h49_LB1-25kb-combined_AD.bed.gz")
@@ -676,13 +676,12 @@ H3K9me3 %>% filter(seqnames != "chrY") %>%
   theme_bw() +
   theme(legend.position = "none")
 
-ggsave("SuppFig13H_LD20241125_H3K9me3_size.pdf", path = "./output/", height = 5, width = 5)
+ggsave("SuppFig13I_LD20241125_H3K9me3_size.pdf", path = "./output/", height = 5, width = 5)
 
 ```
 
 
-
-# Figure Supp 13I - H3K9me3 size distance scatter
+# Figure Supp 13J - H3K9me3 size distance scatter
 ```{r}
 # for non overlapping H3K9me3 and LADs
 dist_ <- data.frame(distanceToNearest(H3K9me3.gr, LADs.gr))
@@ -758,13 +757,12 @@ H3K9me3 %>% filter(seqnames != "chrY") %>%
   theme_bw() +
   theme(legend.position = "none")
 
-ggsave("SuppFig13I_LD20241125_H3K9me3_size_distance_scatter.pdf", path = "./output/", height = 5, width = 5)
+ggsave("SuppFig13J_LD20241125_H3K9me3_size_distance_scatter.pdf", path = "./output/", height = 5, width = 5)
 
 ```
 
 
-
-# Figure Supp 13I - H3K9me3 distance to LAD
+# Figure Supp 13K - H3K9me3 distance to LAD
 ```{r}
 H3K9me3 %>% filter(seqnames != "chrY") %>%
   ggplot(aes(x=ovl, y = dist/1e6, alpha = 0.25, color = ovl)) +
@@ -781,13 +779,12 @@ H3K9me3 %>% filter(seqnames != "chrY") %>%
   theme_bw() +
   theme(legend.position = "none")
 
-ggsave("SuppFig13I_LD20241125_H3K9me3_distance.pdf", path = "./output/", height = 5, width = 5)
+ggsave("SuppFig13K_LD20241125_H3K9me3_distance.pdf", path = "./output/", height = 5, width = 5)
 
 ```
 
 
-
-# Figure Supp 13J - H3K9me3 DamID score
+# Figure Supp 13H - H3K9me3 DamID score
 ```{r}
 # load data
 LADs.bw <- import("/DATA/usr/l.dauban/projects/pA-DamID/E2063_rec_clones_T3_T201h49_T201h143_1_LB1_K9me2/2nd_round/results_mm10_nextseq_strainspecific/tracks/normalized/bin-25kb/T201h49_LB1-25kb-combined.bw")
@@ -818,9 +815,10 @@ H3K9me3 %>% filter(seqnames != "chrY") %>%
   theme_bw() +
   theme(legend.position = "none")
 
-ggsave("SuppFig13J_LD20241125_H3K9me3_DamID.pdf", path = "./output/", height = 5, width = 5)
+ggsave("SuppFig13H_LD20241125_H3K9me3_DamID.pdf", path = "./output/", height = 5, width = 5)
 
 ```
+
 
 
 

@@ -1150,7 +1150,7 @@ ggsave("Fig7D_LD20230717_d3.pdf", path = "./output/", height = 9, width = 13)
 ```
 
 
-# Figure 6E - T48h20
+# Figure 7E - T48h20
 ## Prepare
 ```{r}
 # select T201h65 columns
@@ -1644,7 +1644,169 @@ ggsave("Fig7F_LD20230717_i7.pdf", path = "./output/", height = 9, width = 13)
 ```
 
 
-# Supp Figure 14 - i12 
+# Figure S14A-B - LaminB1 changes in i7 - clone r7
+```{r}
+# Import data
+T201h49r7 = rtracklayer::import("/DATA/usr/l.dauban/projects/pA-DamID/E2063_rec_clones_T3_T201h49_T201h143_1_LB1_K9me2/2nd_round/Differential_tracks/tib_T201h49r7.bw")
+
+# Invert
+T201h49r7[seqnames(T201h49r7) == "chr9" & start(T201h49r7) > clones.df[1,2] & end(T201h49r7)< clones.df[4,2]]$score <- rev(T201h49r7[seqnames(T201h49r7) == "chr9" & start(T201h49r7) > clones.df[1,2] & end(T201h49r7)< clones.df[4,2]]$score)
+
+T201h49r7 <- T201h49r7 %>% as.tibble() %>% dplyr::rename(T201h49_ = score)
+
+
+# Function
+PlotDataTracksLight <- function(input_tib, exp_names, color_groups, 
+                                centromeres = NULL, plot_chr = "chr1", 
+                                plot_start = 1, plot_end = 500e6,
+                                smooth = 1, color_list = NULL,
+                                fix_yaxis = F, aspect_ratio = NULL,
+                                lighten_negative = F, raster = F) {
+  
+  # Get the scores for the samples
+  tib_plot <- input_tib %>%
+    dplyr::select(seqnames, start, end, 
+                  all_of(exp_names))
+  
+  if (smooth > 1) {
+    tib_plot <- tib_plot %>%
+      mutate_at(vars(contains("_")), 
+                runmean, k = smooth)
+  }
+  
+  # Filter for plotting window
+  tib_plot <- tib_plot %>%
+    filter(seqnames == plot_chr,
+           start >= plot_start,
+           end <= plot_end)
+  
+  # Gather
+  tib_gather <- tib_plot %>%
+    gather(key, value, -seqnames, -start, -end) %>%
+    mutate(key = factor(key, levels = exp_names),
+           fill_column = color_groups[match(key, names(color_groups))],
+           fill_column = factor(fill_column, levels = unique(color_groups)))
+  
+  # If desired, make negative values a lighter shade to improve visualization
+  if (lighten_negative) {
+    tib_gather <- tib_gather %>%
+      mutate(fill_column = interaction(fill_column,
+                                       value < 0))
+  }
+  
+  
+  
+  # Plot
+  ylimits <- quantile(tib_gather$value, c(0.001, 0.999), na.rm = T)
+  fill_column <- NULL
+  
+  plt <- tib_gather %>% 
+    ggplot(aes(fill = fill_column))
+  
+  
+  # Set all counts tracks to the same limits
+  if (raster) {
+    plt <- plt + 
+      rasterize(geom_rect(aes(xmin = start / 1e6, xmax = end / 1e6, 
+                              ymin = 0, ymax = value)),
+                dpi = 300)
+  } else {
+    plt <- plt + 
+      geom_rect(aes(xmin = start / 1e6, xmax = end / 1e6, 
+                    ymin = 0, ymax = value))
+  }
+  
+  plt <- plt + 
+    geom_hline(yintercept = 0, size = 0.5) +
+    geom_vline(xintercept = clones.df[1,2]/1e6, size = 0.5, col = "grey") +
+    geom_vline(xintercept = clones.df[4,2]/1e6, size = 0.5, col = "grey") +
+    #geom_segment(data=clones.df, mapping=aes(x=x/1e6, xend=xend/1e6, y=y, yend=yend), size =1)+
+    #geom_segment(data=LAD_loc, mapping=aes(x=x/1e6, xend=xend/1e6, y=y, yend=yend), size =1, color = "#6BAED6")+
+    facet_grid(key ~ ., scales = "free_y") +
+    xlab(paste0(plot_chr, " (Mb)")) +
+    ylab("Change in LmnB1") +
+    scale_x_continuous(expand = c(0, 0)) + 
+    scale_y_continuous(expand = c(0.025, 0.025), limits = c(-1.5, 1.5)) +
+    theme_classic() +
+    theme(text = element_text(size = 50))
+  
+  # Centromeres
+  if (! is.null(centromeres)) {
+    centromeres.plt <- as_tibble(centromeres) %>%
+      filter(seqnames == plot_chr) %>%
+      gather(key_centromeres, value, start, end)
+    
+    plt <- plt +
+      geom_line(data = centromeres.plt, 
+                aes(x = value / 1e6, y = 0),
+                color = "black", size = 2)
+  }
+  
+  if (! is.null(color_list)) {
+    
+    if (lighten_negative) {
+      color_list <- c(color_list,
+                      lighten(color_list, amount = 0.5))
+    }
+    
+    colors <- levels(tib_gather$fill_column)
+    
+    color_list <- color_list[1:length(colors)]
+    names(color_list) <- colors
+    #colors <- recode(colors, !!!color_list)
+    
+    plt <- plt +
+      scale_fill_manual(values = color_list, guide = "none")
+  } else {
+    plt <- plt +
+      scale_fill_brewer(palette = "Set1", guide = "none")
+  }
+  
+  if (fix_yaxis) {
+    plt <- plt + 
+      coord_cartesian(xlim = c(max(c(plot_start,
+                                     min(tib_gather$start))) / 1e6,
+                               min(c(plot_end,
+                                     max(tib_gather$end))) / 1e6),
+                      ylim = ylimits)
+  } else {
+    plt <- plt + 
+      coord_cartesian(xlim = c(max(c(plot_start,
+                                     min(tib_gather$start))) / 1e6,
+                               min(c(plot_end,
+                                     max(tib_gather$end))) / 1e6))
+  }
+  
+  if (! is.null(aspect_ratio)) {
+    plt <- plt +
+      theme(aspect.ratio = aspect_ratio)
+  }
+  
+  plot(plt)
+  
+}
+
+# Plot
+PlotDataTracksLight(input_tib = T201h49r7,
+                    exp_names = c("T201h49_"),
+                    color_groups = c(T201h49_ = "T201h49_"),
+                    plot_chr = "chr9", plot_start = 109937608, plot_end = 114948158,
+                    color_list = c("#D6604D", "#4393C3"),
+                    #color_list = brewer.pal(5, "RdBu"),
+                    aspect_ratio = 1/7,
+                    smooth = 7,
+                    #fix_yaxis = F,
+                    lighten_negative = T,
+                    raster = T)
+
+# save
+ggsave("SuppFig14AB_LD20250407_T201h49_LB1_diff.pdf", path = "./output/", height = 5, width = 20)
+
+```
+
+
+
+# Supp Figure 14C - i12 
 ```{r}
 # load count table
 countdata = readRDS(file = "/DATA/usr/l.dauban/projects/RNA-seq/countdata.rds")
@@ -1912,13 +2074,13 @@ T3h153r10_matrix.df_comb_inv %>% data.frame() %>% group_by(gene_name) %>% mutate
   plot_layout(ncol=1, guides = "collect", heights = c(2,0.1, 0.1, 0.1))
 
 
-ggsave("SuppFig14_LD20230717_i12.pdf", path = "./output/", height = 9, width = 13)
+ggsave("SuppFig14C_LD20230717_i12.pdf", path = "./output/", height = 9, width = 13)
 
 
 ```
 
 
-# Supp Figure 14 - i10
+# Supp Figure 14C - i10
 ```{r}
 
 ############################ CAST
@@ -2148,7 +2310,7 @@ T48h81r18_matrix.df_comb_inv %>% data.frame() %>% group_by(gene_name) %>% mutate
 
   plot_layout(ncol=1, guides = "collect", heights = c(2,0.1, 0.1, 0.1))
 
-ggsave("SuppFig14_LD20230717_i10.pdf", path = "./output/", height = 9, width = 13)
+ggsave("SuppFig14C_LD20230717_i10.pdf", path = "./output/", height = 9, width = 13)
 
 ```
 

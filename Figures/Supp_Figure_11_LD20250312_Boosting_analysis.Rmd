@@ -213,9 +213,6 @@ ggsave("FigS11C_LD20241120_LAD2.pdf", path = "./output/", width = 12)
 ```
 
 
-
-
-
 # Figure Supp 11D - rmes location
 ```{r}
 # Load data
@@ -276,12 +273,6 @@ comb_p %>% mutate(new_bin = cut(start/1e3, breaks=c(seq(0, 200, 10)))) %>% add_r
 ggsave("FigS11D_LD20241216_location.pdf", path = "./output/", width = 7)
 
 ```
-
-
-
-
-
-
 
 
 # Figure Supp 11E - repeats
@@ -363,7 +354,6 @@ tib_count_comb %>% filter(output == "R4-5" | output == "LAD1"| output == "LAD2_b
 ggsave("FigS11E_LD20231128_repeats.pdf", path = "./output/", height = 4, width = 5)  
 
 ```
-
 
 
 # Figure Supp 11F - repeats sub-fammilies
@@ -475,7 +465,6 @@ ggsave("FigS11F_LD20231128_repeats_subfam.pdf", path = "./output/", height = 8, 
 ```
 
 
-
 # Figure Supp 11G - AT content
 ## Load data
 ```{r}
@@ -520,7 +509,6 @@ df_AT_no %>% gather(value = "AT", key = "output") %>% filter(output == "R45" | o
 ggsave("FigS11G_LD20231213_ATcontent.pdf", path = "./output/", height = 6, width = 7)
 
 ```
-
 
 
 # Figure Supp 11H - Secondary structures
@@ -639,7 +627,6 @@ all_motifs %>% group_by(sample, Type) %>% summarise(n = n()) %>% mutate(norm = i
 
 ggsave("FigS11H_LD20241120_second_structure_LAD1.pdf", path = "./output/")
 ```
-
 
 ## LAD2
 ### load data
@@ -760,8 +747,6 @@ ggsave("FigS11H_LD20241120_second_structure_LAD2.pdf", path = "./output/")
 ```
 
 
-
-
 # Figure Supp 11I - H3K9me2 and H3K9me3
 Remainder of the coordinates used in the paper:
 LAD1:
@@ -779,7 +764,7 @@ LAD1:
 ## H3K9me3
 ```{r}
 
-H3K9me3.bw2 <- import("/DATA/usr/l.dauban/projects/pA-DamID/E2063_rec_clones_T3_T201h49_T201h143_2_htchm/results_mm10_nextseq_strainspecific/tracks/normalized/bin-25kb/T201h49_H3K9me3-25kb-combined.bw")
+H3K9me3.bw2 <- import("/DATA/usr/l.dauban/projects/DATA/mESCs_2i/E14_2i_H3K9me3_GSM850407_SRR392308_MQ15_sample.bw")
 
 R45 <- GRanges(seqnames = "chr9",
                ranges = IRanges(start = 112440815, end = 112637306))
@@ -810,9 +795,9 @@ H3K9me3.bw2[queryHits(ovl.4),]$region <- "LAD2.2"
 
 H3K9me3.bw2 %>% data.frame() %>% filter(seqnames == "chr9" & region != "other") %>% mutate(region = factor(region, levels = c("other", "R45", "LAD1", "LAD2.2", "LAD2.1"))) %>%
   ggplot(aes(x=region, y=score, color=region)) +
-  geom_violin(trim = F, show.legend = FALSE) +
-  geom_beeswarm(alpha = 0.5, show.legend = FALSE) +
-  geom_signif(test = "wilcox.test", test.args = list(alternative = c("two.sided")), comparisons = list(c("R45", "LAD1"), c("LAD2.2", "LAD2.1")), color = "black", y_position = c(2.3, 2.3), show.legend = FALSE) +
+ geom_violin(trim = F, show.legend = F) +
+  geom_beeswarm_rast(cex = 0.002, alpha = 0.5, show.legend = F) +
+  geom_signif(test = "wilcox.test", test.args = list(alternative = c("two.sided")), comparisons = list(c("R45", "LAD1"), c("LAD2.2", "LAD2.1")), color = "black", y_position = c(21, 21), show.legend = FALSE) +
   stat_summary(fun=median, geom="crossbar", width=0.35, size = 0.3, color = "black", show.legend = FALSE)+
   scale_color_manual(values = c("#1B899B", "#A6CEE2", "#1B899B", "#A6CEE2")) +
   labs(x = "",
@@ -820,7 +805,7 @@ H3K9me3.bw2 %>% data.frame() %>% filter(seqnames == "chr9" & region != "other") 
   theme_bw() +
   theme(axis.text.x=element_text(angle = 45, hjust = 1))
 
-ggsave("FigS11I_LD20241125_H3K9me3.pdf", path = "./output/", height = 5, width = 5)
+ggsave("FigS11I_LD20250404_H3K9me3.pdf", path = "./output/", height = 5, width = 5)
 
 ```
 
@@ -856,7 +841,7 @@ H3K9me2.bw2 %>% data.frame() %>% filter(seqnames == "chr9" & region != "other" &
   theme_bw() +
   theme(axis.text.x=element_text(angle = 45, hjust = 1))
 
-ggsave("FigS11I_LD20241125_H3K9me2.pdf", path = "./output/", height = 5, width = 5)
+#ggsave("FigS11I_LD20241125_H3K9me2.pdf", path = "./output/", height = 5, width = 5)
 
 ```
 
