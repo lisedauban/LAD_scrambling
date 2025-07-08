@@ -1,0 +1,1158 @@
+---
+title: "ED_5_LAD1_isolation"
+date: "2023-11-28"
+output: 
+  html_document:
+    theme: journal #cerulean
+    highlight: monochrome
+    toc: true
+    toc_float: true
+    code_folding: show
+  editor_options:
+    chunk_output_type: console
+---
+
+Scripts for all figures in the paper.
+This is Extended Data 5
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Load libraries
+```{r}
+suppressWarnings(library(GenomicRanges))
+suppressWarnings(library(dplyr))
+suppressWarnings(library(stringr))
+suppressWarnings(library(readr))
+suppressWarnings(library(tidyr))
+suppressWarnings(library(ggplot2))
+suppressWarnings(library(ggplotify))
+library(rtracklayer)
+library(IRanges)
+library(GenomeInfoDb)
+library(tidyverse)
+library(ggrastr)
+library(gridExtra)
+library(colorspace)
+library(caTools)
+library(RColorBrewer)
+library(ggbeeswarm)
+library(ggsignif)
+library(ggbreak)
+library(plyranges)
+
+```
+
+
+# Load data
+```{r}
+# Load data
+LoadData <- function(samples, directory = "counts", column = "sample", bin_size = "25kb", 
+                     results_dir = "/DATA/usr/l.dauban/projects/pA-DamID/E2316_LAD_isolation_reseq") {
+  # Simply load the normalized values and return one GRanges object with all
+  # the data
+  #
+  # Input:
+  # * samples: samples vector
+  # * directory: directory containing the data
+  # * column: column name with the sample names
+  #
+  # Output:
+  # * GRanges with data
+ 
+  df.norm <- NULL
+ 
+  for (s in samples) {
+   
+    # Create the file path of the sample
+    df.name <- file.path(results_dir,
+                         "results_mm10_nextseq_strainspecific", directory,
+                         paste0("bin-", bin_size),
+                         paste0(s,
+                                ifelse(directory == "normalized",
+                                       ".norm.txt.gz",
+                                       ".counts.txt.gz")))
+   
+    # Read the data
+    print(df.name)
+    df <- read.table(df.name,
+                     sep = "\t", stringsAsFactors = FALSE,
+                     col.names = c("seqnames", "start", "end", s))
+   
+    # Add this to one data frame
+    if (is.null(df.norm)) {
+      df.norm <- df
+    } else {
+      df.norm <- cbind(df.norm, df[, 4], stringsAsFactors = F)
+    }
+  }
+  
+ 
+  # Add +1 to the start, as this was bed-based
+  df.norm[, 2] <- df.norm[, 2] + 1
+  
+  # Change names
+  names(df.norm)[4:ncol(df.norm)] <- samples
+ 
+  # And convert to GRanges
+  df.norm <- as(df.norm, "GRanges")
+  df.norm
+ 
+}
+
+
+###################################### Pool 7
+
+samples <- c("Pool3_cl70_1_Dam_CAS-25kb",
+             "Pool3_cl70_1_Dam_129S1-25kb",
+             "Pool3_cl70_2_Dam_CAS-25kb",
+             "Pool3_cl70_2_Dam_129S1-25kb",
+             "Pool3_cl83_1_Dam_CAS-25kb",
+             "Pool3_cl83_1_Dam_129S1-25kb",
+             "Pool3_cl83_2_Dam_CAS-25kb",
+             "Pool3_cl83_2_Dam_129S1-25kb",
+             "Pool3_cl70_deep_1_Dam_CAS-25kb",
+             "Pool3_cl70_deep_1_Dam_129S1-25kb",
+             "Pool3_cl70_deep_2_Dam_CAS-25kb",
+             "Pool3_cl70_deep_2_Dam_129S1-25kb",
+             "Pool3_cl83_deep_1_Dam_CAS-25kb",
+             "Pool3_cl83_deep_1_Dam_129S1-25kb",
+             "Pool3_cl83_deep_2_Dam_CAS-25kb",
+             "Pool3_cl83_deep_2_Dam_129S1-25kb",
+             "Pool3_cl70_1_LB1_CAS-25kb",
+             "Pool3_cl70_1_LB1_129S1-25kb",
+             "Pool3_cl70_2_LB1_CAS-25kb",
+             "Pool3_cl70_2_LB1_129S1-25kb",
+             "Pool3_cl83_1_LB1_CAS-25kb",
+             "Pool3_cl83_1_LB1_129S1-25kb",
+             "Pool3_cl83_2_LB1_CAS-25kb",
+             "Pool3_cl83_2_LB1_129S1-25kb",
+             "Pool3_cl70_deep_1_LB1_CAS-25kb",
+             "Pool3_cl70_deep_1_LB1_129S1-25kb",
+             "Pool3_cl70_deep_2_LB1_CAS-25kb",
+             "Pool3_cl70_deep_2_LB1_129S1-25kb",
+             "Pool3_cl83_deep_1_LB1_CAS-25kb",
+             "Pool3_cl83_deep_1_LB1_129S1-25kb",
+             "Pool3_cl83_deep_2_LB1_CAS-25kb",
+             "Pool3_cl83_deep_2_LB1_129S1-25kb",
+             "Pool4_cl81_1_Dam_CAS-25kb",
+             "Pool4_cl81_1_Dam_129S1-25kb",
+             "Pool4_cl81_2_Dam_CAS-25kb",
+             "Pool4_cl81_2_Dam_129S1-25kb",
+             "Pool4_cl81_deep_1_Dam_CAS-25kb",
+             "Pool4_cl81_deep_1_Dam_129S1-25kb",
+             "Pool4_cl81_deep_2_Dam_CAS-25kb",
+             "Pool4_cl81_deep_2_Dam_129S1-25kb",
+             "Pool4_cl81_1_LB1_CAS-25kb",
+             "Pool4_cl81_1_LB1_129S1-25kb",
+             "Pool4_cl81_2_LB1_CAS-25kb",
+             "Pool4_cl81_2_LB1_129S1-25kb",
+             "Pool4_cl81_deep_1_LB1_CAS-25kb",
+             "Pool4_cl81_deep_1_LB1_129S1-25kb",
+             "Pool4_cl81_deep_2_LB1_CAS-25kb",
+             "Pool4_cl81_deep_2_LB1_129S1-25kb",
+             "Pool7_cl84_1_LB1_CAS-25kb",
+             "Pool7_cl127_1_LB1_CAS-25kb",
+             "Pool7_cl84_1_LB1_129S1-25kb",
+             "Pool7_cl127_1_LB1_129S1-25kb",
+             "Pool7_cl84_2_LB1_CAS-25kb",
+             "Pool7_cl127_2_LB1_CAS-25kb",
+             "Pool7_cl84_2_LB1_129S1-25kb",
+             "Pool7_cl127_2_LB1_129S1-25kb",
+             "Pool7_cl84_1_Dam_CAS-25kb",
+             "Pool7_cl127_1_Dam_CAS-25kb",
+             "Pool7_cl84_1_Dam_129S1-25kb",
+             "Pool7_cl127_1_Dam_129S1-25kb",
+             "Pool7_cl84_2_Dam_CAS-25kb",
+             "Pool7_cl127_2_Dam_CAS-25kb",
+             "Pool7_cl84_2_Dam_129S1-25kb",
+             "Pool7_cl127_2_Dam_129S1-25kb",
+             "Pool7_cl84_deep_1_LB1_CAS-25kb",
+             "Pool7_cl127_deep_1_LB1_CAS-25kb",
+             "Pool7_cl84_deep_1_LB1_129S1-25kb",
+             "Pool7_cl127_deep_1_LB1_129S1-25kb",
+             "Pool7_cl84_deep_2_LB1_CAS-25kb",
+             "Pool7_cl127_deep_2_LB1_CAS-25kb",
+             "Pool7_cl84_deep_2_LB1_129S1-25kb",
+             "Pool7_cl127_deep_2_LB1_129S1-25kb",
+             "Pool7_cl84_deep_1_Dam_CAS-25kb",
+             "Pool7_cl127_deep_1_Dam_CAS-25kb",
+             "Pool7_cl84_deep_1_Dam_129S1-25kb",
+             "Pool7_cl127_deep_1_Dam_129S1-25kb",
+             "Pool7_cl84_deep_2_Dam_CAS-25kb",
+             "Pool7_cl127_deep_2_Dam_CAS-25kb",
+             "Pool7_cl84_deep_2_Dam_129S1-25kb",
+             "Pool7_cl127_deep_2_Dam_129S1-25kb",
+             "Pool8_cl58_1_LB1_CAS-25kb",
+             "Pool8_cl58_1_LB1_129S1-25kb",
+             "Pool8_cl58_2_LB1_CAS-25kb",
+             "Pool8_cl58_2_LB1_129S1-25kb",
+             "Pool8_cl58_1_Dam_CAS-25kb",
+             "Pool8_cl58_1_Dam_129S1-25kb",
+             "Pool8_cl58_2_Dam_CAS-25kb",
+             "Pool8_cl58_2_Dam_129S1-25kb",
+             "Pool8_cl58_deep_1_LB1_CAS-25kb",
+             "Pool8_cl58_deep_1_LB1_129S1-25kb",
+             "Pool8_cl58_deep_2_LB1_CAS-25kb",
+             "Pool8_cl58_deep_2_LB1_129S1-25kb",
+             "Pool8_cl58_deep_1_Dam_CAS-25kb",
+             "Pool8_cl58_deep_1_Dam_129S1-25kb",
+             "Pool8_cl58_deep_2_Dam_CAS-25kb",
+             "Pool8_cl58_deep_2_Dam_129S1-25kb"
+             )
+
+
+samples <- LoadData(samples)
+samples <- samples %>% as_tibble() %>% rowwise() %>% mutate(Pool3_cl70_CAST = sum(Pool3_cl70_1_LB1_CAS.25kb, Pool3_cl70_2_LB1_CAS.25kb, Pool3_cl70_1_Dam_CAS.25kb, Pool3_cl70_2_Dam_CAS.25kb, 
+                                                                                  Pool3_cl70_deep_1_LB1_CAS.25kb, Pool3_cl70_deep_2_LB1_CAS.25kb, Pool3_cl70_deep_1_Dam_CAS.25kb, Pool3_cl70_deep_2_Dam_CAS.25kb),
+                                                            Pool3_cl70_129S1 = sum(Pool3_cl70_1_LB1_129S1.25kb, Pool3_cl70_2_LB1_129S1.25kb, Pool3_cl70_1_Dam_129S1.25kb, Pool3_cl70_2_Dam_129S1.25kb, 
+                                                                                  Pool3_cl70_deep_1_LB1_129S1.25kb, Pool3_cl70_deep_2_LB1_129S1.25kb, Pool3_cl70_deep_1_Dam_129S1.25kb, Pool3_cl70_deep_2_Dam_129S1.25kb),
+                                                            Pool3_cl83_CAST = sum(Pool3_cl83_1_LB1_CAS.25kb, Pool3_cl83_2_LB1_CAS.25kb, Pool3_cl83_1_Dam_CAS.25kb, Pool3_cl83_2_Dam_CAS.25kb, 
+                                                                                  Pool3_cl83_deep_1_LB1_CAS.25kb, Pool3_cl83_deep_2_LB1_CAS.25kb, Pool3_cl83_deep_1_Dam_CAS.25kb, Pool3_cl83_deep_2_Dam_CAS.25kb),
+                                                            Pool3_cl83_129S1 = sum(Pool3_cl83_1_LB1_129S1.25kb, Pool3_cl83_2_LB1_129S1.25kb, Pool3_cl83_1_Dam_129S1.25kb, Pool3_cl83_2_Dam_129S1.25kb, 
+                                                                                  Pool3_cl83_deep_1_LB1_129S1.25kb, Pool3_cl83_deep_2_LB1_129S1.25kb, Pool3_cl83_deep_1_Dam_129S1.25kb, Pool3_cl83_deep_2_Dam_129S1.25kb),
+                                                            Pool4_cl81_CAST = sum(Pool4_cl81_1_LB1_CAS.25kb, Pool4_cl81_2_LB1_CAS.25kb, Pool4_cl81_1_Dam_CAS.25kb, Pool4_cl81_2_Dam_CAS.25kb, 
+                                                                                  Pool4_cl81_deep_1_LB1_CAS.25kb, Pool4_cl81_deep_2_LB1_CAS.25kb, Pool4_cl81_deep_1_Dam_CAS.25kb, Pool4_cl81_deep_2_Dam_CAS.25kb),
+                                                            Pool4_cl81_129S1 = sum(Pool4_cl81_1_LB1_129S1.25kb, Pool4_cl81_2_LB1_129S1.25kb, Pool4_cl81_1_Dam_129S1.25kb, Pool4_cl81_2_Dam_129S1.25kb, 
+                                                                                  Pool4_cl81_deep_1_LB1_129S1.25kb, Pool4_cl81_deep_2_LB1_129S1.25kb, Pool4_cl81_deep_1_Dam_129S1.25kb, Pool4_cl81_deep_2_Dam_129S1.25kb),
+                                                            Pool7_cl84_CAST = sum(Pool7_cl84_1_LB1_CAS.25kb, Pool7_cl84_2_LB1_CAS.25kb, Pool7_cl84_1_Dam_CAS.25kb, Pool7_cl84_2_Dam_CAS.25kb,
+                                                                                  Pool7_cl84_deep_1_LB1_CAS.25kb, Pool7_cl84_deep_2_LB1_CAS.25kb, Pool7_cl84_deep_1_Dam_CAS.25kb, Pool7_cl84_deep_2_Dam_CAS.25kb),
+                                                            Pool7_cl127_CAST = sum(Pool7_cl127_1_LB1_CAS.25kb, Pool7_cl127_2_LB1_CAS.25kb, Pool7_cl127_1_Dam_CAS.25kb, Pool7_cl127_2_Dam_CAS.25kb,
+                                                                                   Pool7_cl127_deep_1_LB1_CAS.25kb, Pool7_cl127_deep_2_LB1_CAS.25kb, Pool7_cl127_deep_1_Dam_CAS.25kb, Pool7_cl127_deep_2_Dam_CAS.25kb),
+                                                            Pool7_cl84_129 = sum(Pool7_cl84_deep_1_LB1_129S1.25kb, Pool7_cl84_deep_2_LB1_129S1.25kb, Pool7_cl84_deep_1_Dam_129S1.25kb, Pool7_cl84_deep_2_Dam_129S1.25kb,
+                                                                                 Pool7_cl84_deep_1_LB1_129S1.25kb, Pool7_cl84_deep_2_LB1_129S1.25kb, Pool7_cl84_deep_1_Dam_129S1.25kb, Pool7_cl84_deep_2_Dam_129S1.25kb),
+                                                            Pool7_cl127_129 = sum(Pool7_cl127_deep_1_LB1_129S1.25kb, Pool7_cl127_deep_2_LB1_129S1.25kb, Pool7_cl127_deep_1_Dam_129S1.25kb, Pool7_cl127_deep_2_Dam_129S1.25kb,
+                                                                                  Pool7_cl127_deep_1_LB1_129S1.25kb, Pool7_cl127_deep_2_LB1_129S1.25kb, Pool7_cl127_deep_1_Dam_129S1.25kb, Pool7_cl127_deep_2_Dam_129S1.25kb),
+                                                            Pool8_cl58_CAST = sum(Pool8_cl58_deep_1_LB1_CAS.25kb, Pool8_cl58_deep_2_LB1_CAS.25kb, Pool8_cl58_deep_1_Dam_CAS.25kb, Pool8_cl58_deep_2_Dam_CAS.25kb,
+                                                                                  Pool8_cl58_deep_1_LB1_CAS.25kb, Pool8_cl58_deep_2_LB1_CAS.25kb, Pool8_cl58_deep_1_Dam_CAS.25kb, Pool8_cl58_deep_2_Dam_CAS.25kb),
+                                                            Pool8_cl58_129 = sum(Pool8_cl58_deep_1_LB1_129S1.25kb, Pool8_cl58_deep_2_LB1_129S1.25kb, Pool8_cl58_deep_1_Dam_129S1.25kb, Pool8_cl58_deep_2_Dam_129S1.25kb,
+                                                                                 Pool8_cl58_deep_1_LB1_129S1.25kb, Pool8_cl58_deep_2_LB1_129S1.25kb, Pool8_cl58_deep_1_Dam_129S1.25kb, Pool8_cl58_deep_2_Dam_129S1.25kb))
+
+```
+
+
+# Extended Data 5D - Deletion in the strong iLAD - Pool3
+```{r}
+
+## deletion coordinate
+
+del_loc_pool3 = data.frame(sample = c('1', '2'),
+           x = c(110927601, 112439588),
+           y = rep(1.4, 2),
+           xend = c(112653616, 114785359),
+           yend = rep(1.4, 2))
+
+
+# Function
+PlotDataTracksLight <- function(input_tib, exp_names, color_groups, 
+                                centromeres = NULL, plot_chr = "chr1", 
+                                plot_start = 1, plot_end = 500e6,
+                                smooth = 1, color_list = NULL,
+                                fix_yaxis = F, aspect_ratio = NULL,
+                                lighten_negative = F, raster = F) {
+  
+  # Get the scores for the samples
+  tib_plot <- input_tib %>%
+    dplyr::select(seqnames, start, end, 
+                  all_of(exp_names))
+  
+  if (smooth > 1) {
+    tib_plot <- tib_plot %>%
+      mutate_at(vars(contains("_")), 
+                runmean, k = smooth)
+  }
+  
+  # Filter for plotting window
+  tib_plot <- tib_plot %>%
+    filter(seqnames == plot_chr,
+           start >= plot_start,
+           end <= plot_end)
+  
+  # Gather
+  tib_gather <- tib_plot %>%
+    gather(key, value, -seqnames, -start, -end) %>%
+    mutate(key = factor(key, levels = exp_names),
+           fill_column = color_groups[match(key, names(color_groups))],
+           fill_column = factor(fill_column, levels = unique(color_groups)))
+  
+  # If desired, make negative values a lighter shade to improve visualization
+  if (lighten_negative) {
+    tib_gather <- tib_gather %>%
+      mutate(fill_column = interaction(fill_column,
+                                       value < 0))
+  }
+  
+  
+  
+  # Plot
+  ylimits <- quantile(tib_gather$value, c(0.001, 0.999), na.rm = T)
+  fill_column <- NULL
+  
+  plt <- tib_gather %>% 
+    ggplot(aes(fill = fill_column))
+  
+  
+  # Set all counts tracks to the same limits
+  if (raster) {
+    plt <- plt + 
+      rasterize(geom_rect(aes(xmin = start / 1e6, xmax = end / 1e6, 
+                              ymin = 0, ymax = value)),
+                dpi = 300)
+  } else {
+    plt <- plt + 
+      geom_rect(aes(xmin = start / 1e6, xmax = end / 1e6, 
+                    ymin = 0, ymax = value))
+  }
+  
+  plt <- plt + 
+    geom_hline(yintercept = 0, size = 0.5) +
+    #geom_segment(data=del_loc[1,], mapping=aes(x=x/1e6, xend=xend/1e6, y=y, yend=yend), linewidth = 1, color = "#6BAED6")+
+    geom_vline(xintercept = del_loc_pool3[1,]$x/1e6, size = 0.5, col = "black", linetype = "dashed") +
+    geom_vline(xintercept = del_loc_pool3[1,]$xend/1e6, size = 0.5, col = "black", linetype = "dashed") +
+    geom_vline(xintercept = del_loc_pool3[2,]$x/1e6, size = 0.5, col = "black", linetype = "dashed") +
+    geom_vline(xintercept = del_loc_pool3[2,]$xend/1e6, size = 0.5, col = "black", linetype = "dashed") +
+    facet_grid(key ~ ., scales = "free_y") +
+    xlab(paste0(plot_chr, " (Mb)")) +
+    ylab("counts (Dam + LB1)") +
+    #scale_x_continuous(expand = c(0, 0)) + 
+    #scale_y_continuous(expand = c(0.025, 0.025), limits = c(-1.5, 1.5)) +
+    theme_bw() +
+    theme(text = element_text(size = 50))
+  
+  # Centromeres
+  if (! is.null(centromeres)) {
+    centromeres.plt <- as_tibble(centromeres) %>%
+      filter(seqnames == plot_chr) %>%
+      gather(key_centromeres, value, start, end)
+    
+    plt <- plt +
+      geom_line(data = centromeres.plt, 
+                aes(x = value / 1e6, y = 0),
+                color = "black", size = 2)
+  }
+  
+  if (! is.null(color_list)) {
+    
+    if (lighten_negative) {
+      color_list <- c(color_list,
+                      lighten(color_list, amount = 0.5))
+    }
+    
+    colors <- levels(tib_gather$fill_column)
+    
+    color_list <- color_list[1:length(colors)]
+    names(color_list) <- colors
+    #colors <- recode(colors, !!!color_list)
+    
+    plt <- plt +
+      scale_fill_manual(values = color_list, guide = "none")
+  } else {
+    plt <- plt +
+      scale_fill_brewer(palette = "Set1", guide = "none")
+  }
+  
+  if (fix_yaxis) {
+    plt <- plt + 
+      coord_cartesian(xlim = c(max(c(plot_start,
+                                     min(tib_gather$start))) / 1e6,
+                               min(c(plot_end,
+                                     max(tib_gather$end))) / 1e6),
+                      ylim = ylimits)
+  } else {
+    plt <- plt + 
+      coord_cartesian(xlim = c(max(c(plot_start,
+                                     min(tib_gather$start))) / 1e6,
+                               min(c(plot_end,
+                                     max(tib_gather$end))) / 1e6))
+  }
+  
+  if (! is.null(aspect_ratio)) {
+    plt <- plt +
+      theme(aspect.ratio = aspect_ratio)
+  }
+  
+  plot(plt)
+  
+}
+
+
+# Plot
+PlotDataTracksLight(input_tib = samples,
+                    exp_names = c("Pool3_cl70_CAST", "Pool3_cl70_129S1", "Pool3_cl83_CAST", "Pool3_cl83_129S1"),
+                    color_groups = c(Pool3_cl70_CAST = "pA-DamID", Pool3_cl70_129S1 = "pA-DamID", Pool3_cl83_CAST = "pA-DamID", Pool3_cl83_129S1 = "pA-DamID") ,
+                    plot_chr = "chr9", plot_start = 109437608, plot_end = 119448158,
+                    color_list = c("gray"),
+                    #color_list = brewer.pal(3, "Paired"),
+                    aspect_ratio = 1/5,
+                    smooth = 7,
+                    #fix_yaxis = F,
+                    lighten_negative = T,
+                    raster = T)
+
+# ggsave("FigS8B_LD20230809_CRISPR_isol_pool3.pdf", path = "./output/", height = 15, width = 20)
+
+
+```
+
+
+# Extended Data 5D - Deletion in the strong iLAD - Pool4
+```{r}
+## deletion coordinate
+
+del_loc_pool4 = data.frame(sample = c('1', '2'),
+           x = c(110927601, 112360112),
+           y = rep(1.4, 2),
+           xend = c(112154177, 114785359),
+           yend = rep(1.4, 2))
+
+
+# Function
+PlotDataTracksLight <- function(input_tib, exp_names, color_groups, 
+                                centromeres = NULL, plot_chr = "chr1", 
+                                plot_start = 1, plot_end = 500e6,
+                                smooth = 1, color_list = NULL,
+                                fix_yaxis = F, aspect_ratio = NULL,
+                                lighten_negative = F, raster = F) {
+  
+  # Get the scores for the samples
+  tib_plot <- input_tib %>%
+    dplyr::select(seqnames, start, end, 
+                  all_of(exp_names))
+  
+  if (smooth > 1) {
+    tib_plot <- tib_plot %>%
+      mutate_at(vars(contains("_")), 
+                runmean, k = smooth)
+  }
+  
+  # Filter for plotting window
+  tib_plot <- tib_plot %>%
+    filter(seqnames == plot_chr,
+           start >= plot_start,
+           end <= plot_end)
+  
+  # Gather
+  tib_gather <- tib_plot %>%
+    gather(key, value, -seqnames, -start, -end) %>%
+    mutate(key = factor(key, levels = exp_names),
+           fill_column = color_groups[match(key, names(color_groups))],
+           fill_column = factor(fill_column, levels = unique(color_groups)))
+  
+  # If desired, make negative values a lighter shade to improve visualization
+  if (lighten_negative) {
+    tib_gather <- tib_gather %>%
+      mutate(fill_column = interaction(fill_column,
+                                       value < 0))
+  }
+  
+  
+  
+  # Plot
+  ylimits <- quantile(tib_gather$value, c(0.001, 0.999), na.rm = T)
+  fill_column <- NULL
+  
+  plt <- tib_gather %>% 
+    ggplot(aes(fill = fill_column))
+  
+  
+  # Set all counts tracks to the same limits
+  if (raster) {
+    plt <- plt + 
+      rasterize(geom_rect(aes(xmin = start / 1e6, xmax = end / 1e6, 
+                              ymin = 0, ymax = value)),
+                dpi = 300)
+  } else {
+    plt <- plt + 
+      geom_rect(aes(xmin = start / 1e6, xmax = end / 1e6, 
+                    ymin = 0, ymax = value))
+  }
+  
+  plt <- plt + 
+    geom_hline(yintercept = 0, size = 0.5) +
+    #geom_segment(data=del_loc[1,], mapping=aes(x=x/1e6, xend=xend/1e6, y=y, yend=yend), linewidth = 1, color = "#6BAED6")+
+    geom_vline(xintercept = del_loc_pool4[1,]$x/1e6, size = 0.5, col = "black", linetype = "dashed") +
+    geom_vline(xintercept = del_loc_pool4[1,]$xend/1e6, size = 0.5, col = "black", linetype = "dashed") +
+    geom_vline(xintercept = del_loc_pool4[2,]$x/1e6, size = 0.5, col = "black", linetype = "dashed") +
+    geom_vline(xintercept = del_loc_pool4[2,]$xend/1e6, size = 0.5, col = "black", linetype = "dashed") +
+    facet_grid(key ~ ., scales = "free_y") +
+    xlab(paste0(plot_chr, " (Mb)")) +
+    ylab("counts (Dam + LB1)") +
+    #scale_x_continuous(expand = c(0, 0)) + 
+    #scale_y_continuous(expand = c(0.025, 0.025), limits = c(-1.5, 1.5)) +
+    theme_bw() +
+    theme(text = element_text(size = 50))
+  
+  # Centromeres
+  if (! is.null(centromeres)) {
+    centromeres.plt <- as_tibble(centromeres) %>%
+      filter(seqnames == plot_chr) %>%
+      gather(key_centromeres, value, start, end)
+    
+    plt <- plt +
+      geom_line(data = centromeres.plt, 
+                aes(x = value / 1e6, y = 0),
+                color = "black", size = 2)
+  }
+  
+  if (! is.null(color_list)) {
+    
+    if (lighten_negative) {
+      color_list <- c(color_list,
+                      lighten(color_list, amount = 0.5))
+    }
+    
+    colors <- levels(tib_gather$fill_column)
+    
+    color_list <- color_list[1:length(colors)]
+    names(color_list) <- colors
+    #colors <- recode(colors, !!!color_list)
+    
+    plt <- plt +
+      scale_fill_manual(values = color_list, guide = "none")
+  } else {
+    plt <- plt +
+      scale_fill_brewer(palette = "Set1", guide = "none")
+  }
+  
+  if (fix_yaxis) {
+    plt <- plt + 
+      coord_cartesian(xlim = c(max(c(plot_start,
+                                     min(tib_gather$start))) / 1e6,
+                               min(c(plot_end,
+                                     max(tib_gather$end))) / 1e6),
+                      ylim = ylimits)
+  } else {
+    plt <- plt + 
+      coord_cartesian(xlim = c(max(c(plot_start,
+                                     min(tib_gather$start))) / 1e6,
+                               min(c(plot_end,
+                                     max(tib_gather$end))) / 1e6))
+  }
+  
+  if (! is.null(aspect_ratio)) {
+    plt <- plt +
+      theme(aspect.ratio = aspect_ratio)
+  }
+  
+  plot(plt)
+  
+}
+
+
+# Plot
+PlotDataTracksLight(input_tib = samples,
+                    exp_names = c("Pool4_cl81_CAST", "Pool4_cl81_129S1"),
+                    color_groups = c(Pool4_cl81_CAST = "pA-DamID", Pool4_cl81_129S1 = "pA-DamID") ,
+                    plot_chr = "chr9", plot_start = 109437608, plot_end = 119448158,
+                    color_list = c("gray"),
+                    #color_list = brewer.pal(3, "Paired"),
+                    aspect_ratio = 1/5,
+                    smooth = 7,
+                    #fix_yaxis = F,
+                    lighten_negative = T,
+                    raster = T)
+
+# ggsave("FigS8B_LD20230809_CRISPR_isol_pool4.pdf", path = "./output/", height = 10, width = 20)
+
+```
+
+
+# Extended Data 5G - Deletion iclose to LAD4 - Pool7
+```{r}
+
+## deletion coordinate
+
+del_loc_pool7 = data.frame(sample = c('1', '2'),
+           x = c(110927601, 112439588),
+           y = rep(1.4, 2),
+           xend = c(112653616, 116258017),
+           yend = rep(1.4, 2))
+
+
+# Function
+PlotDataTracksLight <- function(input_tib, exp_names, color_groups, 
+                                centromeres = NULL, plot_chr = "chr1", 
+                                plot_start = 1, plot_end = 500e6,
+                                smooth = 1, color_list = NULL,
+                                fix_yaxis = F, aspect_ratio = NULL,
+                                lighten_negative = F, raster = F) {
+  
+  # Get the scores for the samples
+  tib_plot <- input_tib %>%
+    dplyr::select(seqnames, start, end, 
+                  all_of(exp_names))
+  
+  if (smooth > 1) {
+    tib_plot <- tib_plot %>%
+      mutate_at(vars(contains("_")), 
+                runmean, k = smooth)
+  }
+  
+  # Filter for plotting window
+  tib_plot <- tib_plot %>%
+    filter(seqnames == plot_chr,
+           start >= plot_start,
+           end <= plot_end)
+  
+  # Gather
+  tib_gather <- tib_plot %>%
+    gather(key, value, -seqnames, -start, -end) %>%
+    mutate(key = factor(key, levels = exp_names),
+           fill_column = color_groups[match(key, names(color_groups))],
+           fill_column = factor(fill_column, levels = unique(color_groups)))
+  
+  # If desired, make negative values a lighter shade to improve visualization
+  if (lighten_negative) {
+    tib_gather <- tib_gather %>%
+      mutate(fill_column = interaction(fill_column,
+                                       value < 0))
+  }
+  
+  
+  
+  # Plot
+  ylimits <- quantile(tib_gather$value, c(0.001, 0.999), na.rm = T)
+  fill_column <- NULL
+  
+  plt <- tib_gather %>% 
+    ggplot(aes(fill = fill_column))
+  
+  
+  # Set all counts tracks to the same limits
+  if (raster) {
+    plt <- plt + 
+      rasterize(geom_rect(aes(xmin = start / 1e6, xmax = end / 1e6, 
+                              ymin = 0, ymax = value)),
+                dpi = 300)
+  } else {
+    plt <- plt + 
+      geom_rect(aes(xmin = start / 1e6, xmax = end / 1e6, 
+                    ymin = 0, ymax = value))
+  }
+  
+  plt <- plt + 
+    geom_hline(yintercept = 0, size = 0.5) +
+    #geom_segment(data=del_loc[1,], mapping=aes(x=x/1e6, xend=xend/1e6, y=y, yend=yend), linewidth = 1, color = "#6BAED6")+
+    geom_vline(xintercept = del_loc_pool7[1,]$x/1e6, size = 0.5, col = "black", linetype = "dashed") +
+    geom_vline(xintercept = del_loc_pool7[1,]$xend/1e6, size = 0.5, col = "black", linetype = "dashed") +
+    geom_vline(xintercept = del_loc_pool7[2,]$x/1e6, size = 0.5, col = "black", linetype = "dashed") +
+    geom_vline(xintercept = del_loc_pool7[2,]$xend/1e6, size = 0.5, col = "black", linetype = "dashed") +
+    facet_grid(key ~ ., scales = "free_y") +
+    xlab(paste0(plot_chr, " (Mb)")) +
+    ylab("counts (Dam + LB1)") +
+    #scale_x_continuous(expand = c(0, 0)) + 
+    #scale_y_continuous(expand = c(0.025, 0.025), limits = c(-1.5, 1.5)) +
+    theme_bw() +
+    theme(text = element_text(size = 50))
+  
+  # Centromeres
+  if (! is.null(centromeres)) {
+    centromeres.plt <- as_tibble(centromeres) %>%
+      filter(seqnames == plot_chr) %>%
+      gather(key_centromeres, value, start, end)
+    
+    plt <- plt +
+      geom_line(data = centromeres.plt, 
+                aes(x = value / 1e6, y = 0),
+                color = "black", size = 2)
+  }
+  
+  if (! is.null(color_list)) {
+    
+    if (lighten_negative) {
+      color_list <- c(color_list,
+                      lighten(color_list, amount = 0.5))
+    }
+    
+    colors <- levels(tib_gather$fill_column)
+    
+    color_list <- color_list[1:length(colors)]
+    names(color_list) <- colors
+    #colors <- recode(colors, !!!color_list)
+    
+    plt <- plt +
+      scale_fill_manual(values = color_list, guide = "none")
+  } else {
+    plt <- plt +
+      scale_fill_brewer(palette = "Set1", guide = "none")
+  }
+  
+  if (fix_yaxis) {
+    plt <- plt + 
+      coord_cartesian(xlim = c(max(c(plot_start,
+                                     min(tib_gather$start))) / 1e6,
+                               min(c(plot_end,
+                                     max(tib_gather$end))) / 1e6),
+                      ylim = ylimits)
+  } else {
+    plt <- plt + 
+      coord_cartesian(xlim = c(max(c(plot_start,
+                                     min(tib_gather$start))) / 1e6,
+                               min(c(plot_end,
+                                     max(tib_gather$end))) / 1e6))
+  }
+  
+  if (! is.null(aspect_ratio)) {
+    plt <- plt +
+      theme(aspect.ratio = aspect_ratio)
+  }
+  
+  plot(plt)
+  
+}
+
+
+# Plot
+PlotDataTracksLight(input_tib = samples,
+                    exp_names = c("Pool7_cl84_CAST", "Pool7_cl84_129", "Pool7_cl127_CAST", "Pool7_cl127_129"),
+                    color_groups = c(Pool7_cl84_CAST = "pA-DamID", Pool7_cl84_129 = "pA-DamID", Pool7_cl127_CAST = "pA-DamID", Pool7_cl127_129 = "pA-DamID") ,
+                    plot_chr = "chr9", plot_start = 109437608, plot_end = 119448158,
+                    color_list = c("gray"),
+                    #color_list = brewer.pal(3, "Paired"),
+                    aspect_ratio = 1/5,
+                    smooth = 7,
+                    #fix_yaxis = F,
+                    lighten_negative = T,
+                    raster = T)
+
+# ggsave("FigS8E_LD20230809_CRISPR_isol_pool7.pdf", path = "./output/", height = 15, width = 20)
+
+
+```
+
+
+# Extended Data 5G - Deletions close to LAD4 - Pool8
+```{r}
+
+## deletion coordinate
+
+del_loc_pool8 = data.frame(sample = c('1', '2'),
+           x = c(110927601, 112360112),
+           y = rep(1.4, 2),
+           xend = c(112153267, 116258017),
+           yend = rep(1.4, 2))
+
+
+# Function
+PlotDataTracksLight <- function(input_tib, exp_names, color_groups, 
+                                centromeres = NULL, plot_chr = "chr1", 
+                                plot_start = 1, plot_end = 500e6,
+                                smooth = 1, color_list = NULL,
+                                fix_yaxis = F, aspect_ratio = NULL,
+                                lighten_negative = F, raster = F) {
+  
+  # Get the scores for the samples
+  tib_plot <- input_tib %>%
+    dplyr::select(seqnames, start, end, 
+                  all_of(exp_names))
+  
+  if (smooth > 1) {
+    tib_plot <- tib_plot %>%
+      mutate_at(vars(contains("_")), 
+                runmean, k = smooth)
+  }
+  
+  # Filter for plotting window
+  tib_plot <- tib_plot %>%
+    filter(seqnames == plot_chr,
+           start >= plot_start,
+           end <= plot_end)
+  
+  # Gather
+  tib_gather <- tib_plot %>%
+    gather(key, value, -seqnames, -start, -end) %>%
+    mutate(key = factor(key, levels = exp_names),
+           fill_column = color_groups[match(key, names(color_groups))],
+           fill_column = factor(fill_column, levels = unique(color_groups)))
+  
+  # If desired, make negative values a lighter shade to improve visualization
+  if (lighten_negative) {
+    tib_gather <- tib_gather %>%
+      mutate(fill_column = interaction(fill_column,
+                                       value < 0))
+  }
+  
+  
+  
+  # Plot
+  ylimits <- quantile(tib_gather$value, c(0.001, 0.999), na.rm = T)
+  fill_column <- NULL
+  
+  plt <- tib_gather %>% 
+    ggplot(aes(fill = fill_column))
+  
+  
+  # Set all counts tracks to the same limits
+  if (raster) {
+    plt <- plt + 
+      rasterize(geom_rect(aes(xmin = start / 1e6, xmax = end / 1e6, 
+                              ymin = 0, ymax = value)),
+                dpi = 300)
+  } else {
+    plt <- plt + 
+      geom_rect(aes(xmin = start / 1e6, xmax = end / 1e6, 
+                    ymin = 0, ymax = value))
+  }
+  
+  plt <- plt + 
+    geom_hline(yintercept = 0, size = 0.5) +
+    #geom_segment(data=del_loc[1,], mapping=aes(x=x/1e6, xend=xend/1e6, y=y, yend=yend), linewidth = 1, color = "#6BAED6")+
+    geom_vline(xintercept = del_loc_pool8[1,]$x/1e6, size = 0.5, col = "black", linetype = "dashed") +
+    geom_vline(xintercept = del_loc_pool8[1,]$xend/1e6, size = 0.5, col = "black", linetype = "dashed") +
+    geom_vline(xintercept = del_loc_pool8[2,]$x/1e6, size = 0.5, col = "black", linetype = "dashed") +
+    geom_vline(xintercept = del_loc_pool8[2,]$xend/1e6, size = 0.5, col = "black", linetype = "dashed") +
+    facet_grid(key ~ ., scales = "free_y") +
+    xlab(paste0(plot_chr, " (Mb)")) +
+    ylab("counts (Dam + LB1)") +
+    #scale_x_continuous(expand = c(0, 0)) + 
+    #scale_y_continuous(expand = c(0.025, 0.025), limits = c(-1.5, 1.5)) +
+    theme_bw() +
+    theme(text = element_text(size = 50))
+  
+  # Centromeres
+  if (! is.null(centromeres)) {
+    centromeres.plt <- as_tibble(centromeres) %>%
+      filter(seqnames == plot_chr) %>%
+      gather(key_centromeres, value, start, end)
+    
+    plt <- plt +
+      geom_line(data = centromeres.plt, 
+                aes(x = value / 1e6, y = 0),
+                color = "black", size = 2)
+  }
+  
+  if (! is.null(color_list)) {
+    
+    if (lighten_negative) {
+      color_list <- c(color_list,
+                      lighten(color_list, amount = 0.5))
+    }
+    
+    colors <- levels(tib_gather$fill_column)
+    
+    color_list <- color_list[1:length(colors)]
+    names(color_list) <- colors
+    #colors <- recode(colors, !!!color_list)
+    
+    plt <- plt +
+      scale_fill_manual(values = color_list, guide = "none")
+  } else {
+    plt <- plt +
+      scale_fill_brewer(palette = "Set1", guide = "none")
+  }
+  
+  if (fix_yaxis) {
+    plt <- plt + 
+      coord_cartesian(xlim = c(max(c(plot_start,
+                                     min(tib_gather$start))) / 1e6,
+                               min(c(plot_end,
+                                     max(tib_gather$end))) / 1e6),
+                      ylim = ylimits)
+  } else {
+    plt <- plt + 
+      coord_cartesian(xlim = c(max(c(plot_start,
+                                     min(tib_gather$start))) / 1e6,
+                               min(c(plot_end,
+                                     max(tib_gather$end))) / 1e6))
+  }
+  
+  if (! is.null(aspect_ratio)) {
+    plt <- plt +
+      theme(aspect.ratio = aspect_ratio)
+  }
+  
+  plot(plt)
+  
+}
+
+
+PlotDataTracksLight(input_tib = samples,
+                    exp_names = c("Pool8_cl58_CAST", "Pool8_cl58_129"),
+                    color_groups = c(Pool8_cl58_CAST = "pA-DamID", Pool8_cl58_129 = "pA-DamID") ,
+                    plot_chr = "chr9", plot_start = 109437608, plot_end = 119448158,
+                    color_list = c("gray"),
+                    #color_list = brewer.pal(3, "Paired"),
+                    aspect_ratio = 1/5,
+                    smooth = 7,
+                    #fix_yaxis = F,
+                    lighten_negative = T,
+                    raster = T)
+
+
+# ggsave("FigS8E_LD20230809_CRISPR_isol_pool8.pdf", path = "./output/", height = 10, width = 20)
+
+```
+
+
+# Extended Data 5F - right
+## Pool3 - all data
+```{r}
+# Load raw data generated from the domainograms
+load("/DATA/usr/l.dauban/projects/pA-DamID/E2316_LAD_isolation_reseq/stat_tests/Domainograms/Pool3_1/domainograms.RData")
+Pool3_Control = sDamID.Control
+Pool3_Exp = sDamID.Exp
+Pool3_DG = DG.Exp
+
+# Add LAD feature
+Pool3.ROI = GRanges(seqnames = "chr9", ranges = IRanges(110927601, 112439588))
+
+Pool3_Exp <- Pool3_Exp %>% mutate(LAD = ifelse(Pool3_Exp$logratio > 0, "LAD", "iLAD"))
+Pool3_Exp[which(seqnames(Pool3_Exp) == "chr9" & start(Pool3_Exp) > start(Pool3.ROI) & start(Pool3_Exp) < end(Pool3.ROI))]$LAD <- "ROI"
+
+# filter on plotted window
+window = data.frame(start = 109937608,  end = 119448158)
+
+Pool3_Exp.window <- Pool3_Exp %>% filter(seqnames == "chr9" & start > window$start & start < window$end & logratio != "NA") %>% as_tibble()
+
+# sample dataset
+pool3.nrow <- Pool3_Exp.window %>% filter(LAD == "ROI") %>% summarise(nrow = nrow(.))
+
+set.seed(1000)
+
+Pool3_Exp.window.iLAD <- Pool3_Exp.window %>% filter(LAD == "iLAD") %>% slice_sample(n= pool3.nrow$nrow)
+Pool3_Exp.window.LAD <- Pool3_Exp.window %>% filter(LAD == "LAD") %>% slice_sample(n= pool3.nrow$nrow)
+Pool3_Exp.window.ROI <- Pool3_Exp.window %>% filter(LAD == "ROI")
+
+```
+
+## Pool4 - all data
+```{r}
+# Load smoothed data generated from the domainograms
+load("/DATA/usr/l.dauban/projects/pA-DamID/E2316_LAD_isolation_reseq/stat_tests/Domainograms/Pool4_1/domainograms.RData")
+Pool4_Control = sDamID.Control
+Pool4_Exp = sDamID.Exp
+Pool4_DG = DG.Exp
+
+# Add LAD feature
+Pool4.ROI = GRanges(seqnames = "chr9", ranges = IRanges(110927601, 112154177))
+
+Pool4_Exp <- Pool4_Exp %>% mutate(LAD = ifelse(Pool4_Exp$logratio > 0, "LAD", "iLAD"))
+Pool4_Exp[which(seqnames(Pool4_Exp) == "chr9" & start(Pool4_Exp) > start(Pool4.ROI) & start(Pool4_Exp) < end(Pool4.ROI))]$LAD <- "ROI"
+
+# filter on plotted window
+window = data.frame(start = 109937608,  end = 119448158)
+
+Pool4_Exp.window <- Pool4_Exp %>% filter(seqnames == "chr9" & start > window$start & start < window$end & logratio != "NA") %>% as_tibble()
+
+# sample dataset
+Pool4.nrow <- Pool4_Exp.window %>% filter(LAD == "ROI") %>% summarise(nrow = nrow(.))
+
+Pool4_Exp.window.iLAD <- Pool4_Exp.window %>% filter(LAD == "iLAD") %>% slice_sample(n= Pool4.nrow$nrow)
+Pool4_Exp.window.LAD <- Pool4_Exp.window %>% filter(LAD == "LAD") %>% slice_sample(n= Pool4.nrow$nrow)
+Pool4_Exp.window.ROI <- Pool4_Exp.window %>% filter(LAD == "ROI")
+
+```
+
+## Pool3 - GATC fragments every 2.5 kb
+```{r}
+# loop to select gatc fragments separated by at least 2.5 kb
+vect1 = 2:nrow(Pool3_Exp.window.ROI)
+Pool3_Exp.window.ROI_2 = Pool3_Exp.window.ROI[1,]
+
+for (i in vect1){
+  if (Pool3_Exp.window.ROI[i,]$start - Pool3_Exp.window.ROI_2[nrow(Pool3_Exp.window.ROI_2),]$start < 2500) {
+    next
+  } 
+  Pool3_Exp.window.ROI_2 = rbind(Pool3_Exp.window.ROI_2, Pool3_Exp.window.ROI[i,])
+  }
+
+```
+
+## Pool4 - GATC fragments every 2.5 kb
+```{r}
+# loop to select gatc fragments separated by at least 2.5 kb
+vect1 = 2:nrow(Pool4_Exp.window.ROI)
+Pool4_Exp.window.ROI_2 = Pool4_Exp.window.ROI[1,]
+
+for (i in vect1){
+  if (Pool4_Exp.window.ROI[i,]$start - Pool4_Exp.window.ROI_2[nrow(Pool4_Exp.window.ROI_2),]$start < 2500) {
+    next
+  } 
+  Pool4_Exp.window.ROI_2 = rbind(Pool4_Exp.window.ROI_2, Pool4_Exp.window.ROI[i,])
+  }
+
+```
+
+## Compare pool3 and pool4
+```{r}
+# Normalise pool3 data
+Q005.pool3 = quantile((mcols(Pool3_Exp)$logratio + mcols(Pool3_Control)$logratio) / 2, 0.05, na.rm=TRUE)
+Pool3_Exp.window.ROI.norm <- Pool3_Exp.window.ROI_2 %>% rowwise() %>% mutate(logratio = logratio - Q005.pool3)
+Pool3_Exp.window.ROI.norm$pool <- "Pool3"
+
+# Normalise pool4 data
+Q005.pool4 = quantile((mcols(Pool4_Exp)$logratio + mcols(Pool4_Control)$logratio) / 2, 0.05, na.rm=TRUE)
+Pool4_Exp.window.ROI.norm <- Pool4_Exp.window.ROI_2 %>% rowwise() %>% mutate(logratio = logratio - Q005.pool4)
+Pool4_Exp.window.ROI.norm$pool <- "Pool4"
+
+# Combine
+ROI.norm.comb <- rbind(Pool3_Exp.window.ROI.norm, Pool4_Exp.window.ROI.norm)
+
+# Plot
+ROI.norm.comb %>%
+  ggplot(aes(x= pool, y= logratio)) + 
+  geom_violin(aes(color = pool), show.legend = "none") +
+  geom_beeswarm(aes(color = pool), alpha = 0.1, priority ="random", show.legend = "none") +
+  geom_signif(test = "wilcox.test", test.args = list(alternative = c("greater")), comparisons = list(c("Pool3", "Pool4")))+
+  stat_summary(fun=mean, geom="crossbar", width=0.2)+
+  labs(title = "ROI comparaison - raw data - GATC fragments 2.5 kb apart",
+       x = "",
+       y = "normalised pA-DamID (z-score)") +
+  scale_color_manual(labels = c("Pool3", "Pool4"), values = c('#1D899B', '#A7CEE1'))+
+  scale_x_discrete(labels=c('R4-5', 'R2-3')) +
+  theme_bw()
+
+# ggsave("FigS8Dter_LD20250501.pdf", path = "./output/", height = 4, width = 6)
+
+```
+
+
+# Extended Data 5F - left
+```{r}
+# loop to select gatc fragments separated by at least 2.5 kb
+## ROI
+vect1 = 2:nrow(Pool3_Exp.window.ROI)
+Pool3_Exp.window.ROI_2 = Pool3_Exp.window.ROI[1,]
+
+for (i in vect1){
+  if (Pool3_Exp.window.ROI[i,]$start - Pool3_Exp.window.ROI_2[nrow(Pool3_Exp.window.ROI_2),]$start < 2500) {
+    next
+  } 
+  Pool3_Exp.window.ROI_2 = rbind(Pool3_Exp.window.ROI_2, Pool3_Exp.window.ROI[i,])
+  }
+
+
+## LAD
+Pool3_Exp.window.LAD.2.5 <- Pool3_Exp.window %>% filter(LAD == "LAD") 
+Pool3_Exp.window.LAD.2.5_2 <- Pool3_Exp.window.LAD.2.5[1,]
+vect2 <- 2: nrow(Pool3_Exp.window.LAD.2.5)
+
+for (i in vect2){
+  if (Pool3_Exp.window.LAD.2.5[i,]$start - Pool3_Exp.window.LAD.2.5_2[nrow(Pool3_Exp.window.LAD.2.5_2),]$start < 2500) {
+    next
+  } 
+  Pool3_Exp.window.LAD.2.5_2 = rbind(Pool3_Exp.window.LAD.2.5_2, Pool3_Exp.window.LAD.2.5[i,])
+}
+
+## check loop
+#Pool3_Exp.window.LAD.2.5_2 %>% rowwise() %>% mutate(dist = start - 109940861)
+
+
+## iLAD
+Pool3_Exp.window.iLAD.2.5 <- Pool3_Exp.window %>% filter(LAD == "iLAD") 
+Pool3_Exp.window.iLAD.2.5_2 <- Pool3_Exp.window.iLAD.2.5[1,]
+vect2 <- 2: nrow(Pool3_Exp.window.iLAD.2.5)
+
+for (i in vect2){
+  if (Pool3_Exp.window.iLAD.2.5[i,]$start - Pool3_Exp.window.iLAD.2.5_2[nrow(Pool3_Exp.window.iLAD.2.5_2),]$start < 2500) {
+    next
+  } 
+  Pool3_Exp.window.iLAD.2.5_2 = rbind(Pool3_Exp.window.iLAD.2.5_2, Pool3_Exp.window.iLAD.2.5[i,])
+}
+
+## check loop
+#Pool3_Exp.window.iLAD.2.5_2 %>% rowwise() %>% mutate(dist = start - 109938839)
+
+
+# Combine
+Pool3_Exp.window.comb.2.5 <- rbind(Pool3_Exp.window.iLAD.2.5_2, Pool3_Exp.window.LAD.2.5_2, Pool3_Exp.window.ROI_2)
+
+# Plot
+Pool3_Exp.window.comb.2.5 %>% mutate(LAD = factor(LAD, levels = c("iLAD", "ROI", "LAD"))) %>%
+  ggplot(aes(x= LAD, y= logratio)) + 
+  geom_violin(aes(color = LAD), show.legend = "none") +
+  geom_beeswarm(aes(color = LAD), cex = 0.23, alpha = 0.1, priority ="random", show.legend = "none") +
+  stat_summary(fun=mean, geom="crossbar", width=0.2)+
+  geom_signif(test = "wilcox.test", test.args = list(alternative = c("greater")), comparisons = list(c("ROI", "iLAD"), c("LAD", "ROI")))+
+  labs(title = "Pool3 - raw data - GATC fragments 2.5 kb apart",
+       x = "",
+       y = "pA-DamID (z-score)") +
+  theme_bw()+
+  #scale_y_continuous(breaks=seq(-6,40,3))+
+  scale_color_manual(labels = c("iLAD","ROI", "LAD"), values = c("#F4C374", '#1D899B', '#A7CEE1'))+
+  scale_x_discrete(labels=c("iLAD", 'R4-5', 'LAD'), position = "bottom") +
+  scale_y_break(c(4, 26), ticklabels = c(-6, 40, 3))
+  
+
+
+# ggsave("FigS8D_LD20250501.pdf", path = "./output/", height = 4, width = 6)
+
+
+```
+
+
+# Extended Data 5F - middle
+```{r}
+# loop to select gatc fragments separated by at least 2.5 kb
+## ROI
+vect1 = 2:nrow(Pool4_Exp.window.ROI)
+Pool4_Exp.window.ROI_2 = Pool4_Exp.window.ROI[1,]
+
+for (i in vect1){
+  if (Pool4_Exp.window.ROI[i,]$start - Pool4_Exp.window.ROI_2[nrow(Pool4_Exp.window.ROI_2),]$start < 2500) {
+    next
+  } 
+  Pool4_Exp.window.ROI_2 = rbind(Pool4_Exp.window.ROI_2, Pool4_Exp.window.ROI[i,])
+  }
+
+
+## LAD
+Pool4_Exp.window.LAD.2.5 <- Pool4_Exp.window %>% filter(LAD == "LAD") 
+Pool4_Exp.window.LAD.2.5_2 <- Pool4_Exp.window.LAD.2.5[1,]
+vect2 <- 2: nrow(Pool4_Exp.window.LAD.2.5)
+
+for (i in vect2){
+  if (Pool4_Exp.window.LAD.2.5[i,]$start - Pool4_Exp.window.LAD.2.5_2[nrow(Pool4_Exp.window.LAD.2.5_2),]$start < 2500) {
+    next
+  } 
+  Pool4_Exp.window.LAD.2.5_2 = rbind(Pool4_Exp.window.LAD.2.5_2, Pool4_Exp.window.LAD.2.5[i,])
+}
+
+## check loop
+#Pool4_Exp.window.LAD.2.5_2 %>% rowwise() %>% mutate(dist = start - 109940861)
+
+
+## iLAD
+Pool4_Exp.window.iLAD.2.5 <- Pool4_Exp.window %>% filter(LAD == "iLAD") 
+Pool4_Exp.window.iLAD.2.5_2 <- Pool4_Exp.window.iLAD.2.5[1,]
+vect2 <- 2: nrow(Pool4_Exp.window.iLAD.2.5)
+
+for (i in vect2){
+  if (Pool4_Exp.window.iLAD.2.5[i,]$start - Pool4_Exp.window.iLAD.2.5_2[nrow(Pool4_Exp.window.iLAD.2.5_2),]$start < 2500) {
+    next
+  } 
+  Pool4_Exp.window.iLAD.2.5_2 = rbind(Pool4_Exp.window.iLAD.2.5_2, Pool4_Exp.window.iLAD.2.5[i,])
+}
+
+## check loop
+#Pool4_Exp.window.iLAD.2.5_2 %>% rowwise() %>% mutate(dist = start - 109938839)
+
+
+# Combine
+Pool4_Exp.window.comb.2.5 <- rbind(Pool4_Exp.window.iLAD.2.5_2, Pool4_Exp.window.LAD.2.5_2, Pool4_Exp.window.ROI_2)
+
+# Plot
+Pool4_Exp.window.comb.2.5 %>% mutate(LAD = factor(LAD, levels = c("iLAD", "ROI", "LAD"))) %>%
+  ggplot(aes(x= LAD, y= logratio)) + 
+  geom_violin(aes(color = LAD), show.legend = "none") +
+  geom_beeswarm(aes(color = LAD), cex = 0.35, alpha = 0.1, priority ="random", show.legend = "none") +
+  stat_summary(fun=mean, geom="crossbar", width=0.2) +
+  geom_signif(test = "wilcox.test", test.args = list(alternative = c("greater")), comparisons = list(c("ROI", "iLAD"), c("LAD", "ROI")))+
+  labs(title = "Pool4 - raw data - GATC fragments 2.5 kb apart",
+       x = "",
+       y = "pA-DamID (z-score)") +
+  coord_cartesian(ylim = c(-8, 5))+
+  scale_color_manual(labels = c("iLAD","ROI", "LAD"), values = c("#F4C374", '#A7CEE1', '#A7CEE1'))+
+  scale_x_discrete(labels=c("iLAD", 'R2-3', 'LAD')) +
+  theme_bw()
+  
+# ggsave("FigS8Dbis_LD20250501.pdf", path = "./output/", height = 4, width = 6)
+
+```
+
+
+
+
+

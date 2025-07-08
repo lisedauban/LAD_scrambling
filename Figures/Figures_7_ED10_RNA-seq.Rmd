@@ -1,0 +1,2397 @@
+---
+title: "Figures_7_ED10_LD20231128_RNA-seq"
+date: "2023-11-28"
+output: 
+  html_document:
+    theme: journal #cerulean
+    highlight: monochrome
+    toc: true
+    toc_float: true
+    code_folding: show
+  editor_options:
+    chunk_output_type: console
+---
+
+Scripts for all figures in the paper.
+This is Figure 7 and Extended Figure 10
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Load libraries
+```{r}
+library(edgeR)
+library(GenomicRanges)
+library(rtracklayer)
+library(patchwork)
+library(caTools)
+library(plotly)
+suppressMessages(library(BSgenome))
+suppressMessages(library(BSgenome.Mmusculus.UCSC.mm10))
+suppressMessages(library(Biostrings))
+suppressMessages(library(tidyverse))
+suppressMessages(library(magrittr))
+suppressMessages(library(GenomicFeatures))
+suppressMessages(library(dplyr))
+library(ggplot2)
+library(ggpubr)
+library(DESeq2)
+library(biomaRt)
+library(plyranges)
+library(RColorBrewer)
+library(plyranges)
+library(ggrastr)
+library(colorspace)
+
+```
+
+
+# Figure 7A - LaminB1 changes in d3
+```{r}
+# Import data
+T201h65_diff.gr = rtracklayer::import("/DATA/usr/l.dauban/projects/pA-DamID/E1972_pA-Dam_rec_clones/Differential tracks/T201h65r21_diff_track_CAST.bw") %>% as.tibble() %>% dplyr::rename(T201h65_ = score)
+
+clones.df = data.frame(sample = c('donor', 'T65', 'T48h20', 'T201h49'),
+           x = c(110927601, 112396323, 112877498,  112520473),
+           y = rep(2, 4),
+           xend = c(110927601, 112396323, 112877498,  112520473),
+           yend = rep(-2, 4))
+
+# Function
+PlotDataTracksLight <- function(input_tib, exp_names, color_groups, 
+                                centromeres = NULL, plot_chr = "chr1", 
+                                plot_start = 1, plot_end = 500e6,
+                                smooth = 1, color_list = NULL,
+                                fix_yaxis = F, aspect_ratio = NULL,
+                                lighten_negative = F, raster = F) {
+  
+  # Get the scores for the samples
+  tib_plot <- input_tib %>%
+    dplyr::select(seqnames, start, end, 
+                  all_of(exp_names))
+  
+  if (smooth > 1) {
+    tib_plot <- tib_plot %>%
+      mutate_at(vars(contains("_")), 
+                runmean, k = smooth)
+  }
+  
+  # Filter for plotting window
+  tib_plot <- tib_plot %>%
+    filter(seqnames == plot_chr,
+           start >= plot_start,
+           end <= plot_end)
+  
+  # Gather
+  tib_gather <- tib_plot %>%
+    gather(key, value, -seqnames, -start, -end) %>%
+    mutate(key = factor(key, levels = exp_names),
+           fill_column = color_groups[match(key, names(color_groups))],
+           fill_column = factor(fill_column, levels = unique(color_groups)))
+  
+  # If desired, make negative values a lighter shade to improve visualization
+  if (lighten_negative) {
+    tib_gather <- tib_gather %>%
+      mutate(fill_column = interaction(fill_column,
+                                       value < 0))
+  }
+  
+  
+  
+  # Plot
+  ylimits <- quantile(tib_gather$value, c(0.001, 0.999), na.rm = T)
+  fill_column <- NULL
+  
+  plt <- tib_gather %>% 
+    ggplot(aes(fill = fill_column))
+  
+  
+  # Set all counts tracks to the same limits
+  if (raster) {
+    plt <- plt + 
+      rasterize(geom_rect(aes(xmin = start / 1e6, xmax = end / 1e6, 
+                              ymin = 0, ymax = value)),
+                dpi = 300)
+  } else {
+    plt <- plt + 
+      geom_rect(aes(xmin = start / 1e6, xmax = end / 1e6, 
+                    ymin = 0, ymax = value))
+  }
+  
+  plt <- plt + 
+    geom_hline(yintercept = 0, size = 0.5) +
+    geom_vline(xintercept = clones.df[1,2]/1e6, size = 0.5, col = "grey") +
+    geom_vline(xintercept = clones.df[2,2]/1e6, size = 0.5, col = "grey") +
+    #geom_segment(data=clones.df, mapping=aes(x=x/1e6, xend=xend/1e6, y=y, yend=yend), size =1)+
+    #geom_segment(data=LAD_loc, mapping=aes(x=x/1e6, xend=xend/1e6, y=y, yend=yend), size =1, color = "#6BAED6")+
+    facet_grid(key ~ ., scales = "free_y") +
+    xlab(paste0(plot_chr, " (Mb)")) +
+    ylab("Change in LmnB1") +
+    scale_x_continuous(expand = c(0, 0)) + 
+    scale_y_continuous(expand = c(0.025, 0.025), limits = c(-1.5, 1.5)) +
+    theme_classic() +
+    theme(text = element_text(size = 50))
+  
+  # Centromeres
+  if (! is.null(centromeres)) {
+    centromeres.plt <- as_tibble(centromeres) %>%
+      filter(seqnames == plot_chr) %>%
+      gather(key_centromeres, value, start, end)
+    
+    plt <- plt +
+      geom_line(data = centromeres.plt, 
+                aes(x = value / 1e6, y = 0),
+                color = "black", size = 2)
+  }
+  
+  if (! is.null(color_list)) {
+    
+    if (lighten_negative) {
+      color_list <- c(color_list,
+                      lighten(color_list, amount = 0.5))
+    }
+    
+    colors <- levels(tib_gather$fill_column)
+    
+    color_list <- color_list[1:length(colors)]
+    names(color_list) <- colors
+    #colors <- recode(colors, !!!color_list)
+    
+    plt <- plt +
+      scale_fill_manual(values = color_list, guide = "none")
+  } else {
+    plt <- plt +
+      scale_fill_brewer(palette = "Set1", guide = "none")
+  }
+  
+  if (fix_yaxis) {
+    plt <- plt + 
+      coord_cartesian(xlim = c(max(c(plot_start,
+                                     min(tib_gather$start))) / 1e6,
+                               min(c(plot_end,
+                                     max(tib_gather$end))) / 1e6),
+                      ylim = ylimits)
+  } else {
+    plt <- plt + 
+      coord_cartesian(xlim = c(max(c(plot_start,
+                                     min(tib_gather$start))) / 1e6,
+                               min(c(plot_end,
+                                     max(tib_gather$end))) / 1e6))
+  }
+  
+  if (! is.null(aspect_ratio)) {
+    plt <- plt +
+      theme(aspect.ratio = aspect_ratio)
+  }
+  
+  plot(plt)
+  
+}
+
+# Plot
+PlotDataTracksLight(input_tib = T201h65_diff.gr,
+                    exp_names = c("T201h65_"),
+                    color_groups = c(T201h65_ = "T201h65_"),
+                    plot_chr = "chr9", plot_start = 109937608, plot_end = 114948158,
+                    color_list = c("#D6604D", "#4393C3"),
+                    #color_list = brewer.pal(5, "RdBu"),
+                    aspect_ratio = 1/7,
+                    smooth = 7,
+                    #fix_yaxis = F,
+                    lighten_negative = T,
+                    raster = T)
+
+
+# # save
+# ggsave("Fig7A_LD20230815_T201h65_LB1_diff.pdf", path = "./output/", height = 5, width = 20)
+
+
+```
+
+
+# Figure 7B - LaminB1 changes in d6
+```{r}
+# Import data
+T48h20_diff.gr = rtracklayer::import("/DATA/usr/l.dauban/projects/pA-DamID/E1972_pA-Dam_rec_clones/Differential tracks/T48h20r16_diff_track_CAST.bw") %>% as.tibble() %>% dplyr::rename(T48h20_ = score)
+
+# Function
+PlotDataTracksLight <- function(input_tib, exp_names, color_groups, 
+                                centromeres = NULL, plot_chr = "chr1", 
+                                plot_start = 1, plot_end = 500e6,
+                                smooth = 1, color_list = NULL,
+                                fix_yaxis = F, aspect_ratio = NULL,
+                                lighten_negative = F, raster = F) {
+  
+  # Get the scores for the samples
+  tib_plot <- input_tib %>%
+    dplyr::select(seqnames, start, end, 
+                  all_of(exp_names))
+  
+  if (smooth > 1) {
+    tib_plot <- tib_plot %>%
+      mutate_at(vars(contains("_")), 
+                runmean, k = smooth)
+  }
+  
+  # Filter for plotting window
+  tib_plot <- tib_plot %>%
+    filter(seqnames == plot_chr,
+           start >= plot_start,
+           end <= plot_end)
+  
+  # Gather
+  tib_gather <- tib_plot %>%
+    gather(key, value, -seqnames, -start, -end) %>%
+    mutate(key = factor(key, levels = exp_names),
+           fill_column = color_groups[match(key, names(color_groups))],
+           fill_column = factor(fill_column, levels = unique(color_groups)))
+  
+  # If desired, make negative values a lighter shade to improve visualization
+  if (lighten_negative) {
+    tib_gather <- tib_gather %>%
+      mutate(fill_column = interaction(fill_column,
+                                       value < 0))
+  }
+  
+  
+  
+  # Plot
+  ylimits <- quantile(tib_gather$value, c(0.001, 0.999), na.rm = T)
+  fill_column <- NULL
+  
+  plt <- tib_gather %>% 
+    ggplot(aes(fill = fill_column))
+  
+  
+  # Set all counts tracks to the same limits
+  if (raster) {
+    plt <- plt + 
+      rasterize(geom_rect(aes(xmin = start / 1e6, xmax = end / 1e6, 
+                              ymin = 0, ymax = value)),
+                dpi = 300)
+  } else {
+    plt <- plt + 
+      geom_rect(aes(xmin = start / 1e6, xmax = end / 1e6, 
+                    ymin = 0, ymax = value))
+  }
+  
+  plt <- plt + 
+    geom_hline(yintercept = 0, size = 0.5) +
+    geom_vline(xintercept = clones.df[1,2]/1e6, size = 0.5, col = "grey") +
+    geom_vline(xintercept = clones.df[3,2]/1e6, size = 0.5, col = "grey") +
+    #geom_segment(data=clones.df, mapping=aes(x=x/1e6, xend=xend/1e6, y=y, yend=yend), size =1)+
+    #geom_segment(data=LAD_loc, mapping=aes(x=x/1e6, xend=xend/1e6, y=y, yend=yend), size =1, color = "#6BAED6")+
+    facet_grid(key ~ ., scales = "free_y") +
+    xlab(paste0(plot_chr, " (Mb)")) +
+    ylab("Change in LmnB1") +
+    scale_x_continuous(expand = c(0, 0)) + 
+    scale_y_continuous(expand = c(0.025, 0.025), limits = c(-1.5, 1.5)) +
+    theme_classic() +
+    theme(text = element_text(size = 50))
+  
+  # Centromeres
+  if (! is.null(centromeres)) {
+    centromeres.plt <- as_tibble(centromeres) %>%
+      filter(seqnames == plot_chr) %>%
+      gather(key_centromeres, value, start, end)
+    
+    plt <- plt +
+      geom_line(data = centromeres.plt, 
+                aes(x = value / 1e6, y = 0),
+                color = "black", size = 2)
+  }
+  
+  if (! is.null(color_list)) {
+    
+    if (lighten_negative) {
+      color_list <- c(color_list,
+                      lighten(color_list, amount = 0.5))
+    }
+    
+    colors <- levels(tib_gather$fill_column)
+    
+    color_list <- color_list[1:length(colors)]
+    names(color_list) <- colors
+    #colors <- recode(colors, !!!color_list)
+    
+    plt <- plt +
+      scale_fill_manual(values = color_list, guide = "none")
+  } else {
+    plt <- plt +
+      scale_fill_brewer(palette = "Set1", guide = "none")
+  }
+  
+  if (fix_yaxis) {
+    plt <- plt + 
+      coord_cartesian(xlim = c(max(c(plot_start,
+                                     min(tib_gather$start))) / 1e6,
+                               min(c(plot_end,
+                                     max(tib_gather$end))) / 1e6),
+                      ylim = ylimits)
+  } else {
+    plt <- plt + 
+      coord_cartesian(xlim = c(max(c(plot_start,
+                                     min(tib_gather$start))) / 1e6,
+                               min(c(plot_end,
+                                     max(tib_gather$end))) / 1e6))
+  }
+  
+  if (! is.null(aspect_ratio)) {
+    plt <- plt +
+      theme(aspect.ratio = aspect_ratio)
+  }
+  
+  plot(plt)
+  
+}
+
+# Plot
+PlotDataTracksLight(input_tib = T48h20_diff.gr,
+                    exp_names = c("T48h20_"),
+                    color_groups = c(T48h20_ = "T48h20_"),
+                    plot_chr = "chr9", plot_start = 109937608, plot_end = 114948158,
+                    color_list = c("#D6604D", "#4393C3"),
+                    #color_list = brewer.pal(5, "RdBu"),
+                    aspect_ratio = 1/7,
+                    smooth = 7,
+                    #fix_yaxis = F,
+                    lighten_negative = T,
+                    raster = T)
+
+
+# # save
+# ggsave("Fig7B_LD20230815_T48h20_LB1_diff.pdf", path = "./output/", height = 5, width = 20)
+
+
+```
+
+
+# Figure 7C - LaminB1 changes in i7
+```{r}
+# Import data
+T201h49r_comb_diff.gr = rtracklayer::import("/DATA/usr/l.dauban/projects/pA-DamID/E2063_rec_clones_T3_T201h49_T201h143_1_LB1_K9me2/2nd_round/Differential_tracks/tib_T201h49r_comb.bw")
+
+# Invert
+T201h49r_comb_diff.gr[seqnames(T201h49r_comb_diff.gr) == "chr9" & start(T201h49r_comb_diff.gr) > clones.df[1,2] & end(T201h49r_comb_diff.gr)< clones.df[4,2]]$score <- rev(T201h49r_comb_diff.gr[seqnames(T201h49r_comb_diff.gr) == "chr9" & start(T201h49r_comb_diff.gr) > clones.df[1,2] & end(T201h49r_comb_diff.gr)< clones.df[4,2]]$score)
+
+T201h49r_comb_diff.gr <- T201h49r_comb_diff.gr %>% as.tibble() %>% dplyr::rename(T201h49_ = score)
+
+
+# Function
+PlotDataTracksLight <- function(input_tib, exp_names, color_groups, 
+                                centromeres = NULL, plot_chr = "chr1", 
+                                plot_start = 1, plot_end = 500e6,
+                                smooth = 1, color_list = NULL,
+                                fix_yaxis = F, aspect_ratio = NULL,
+                                lighten_negative = F, raster = F) {
+  
+  # Get the scores for the samples
+  tib_plot <- input_tib %>%
+    dplyr::select(seqnames, start, end, 
+                  all_of(exp_names))
+  
+  if (smooth > 1) {
+    tib_plot <- tib_plot %>%
+      mutate_at(vars(contains("_")), 
+                runmean, k = smooth)
+  }
+  
+  # Filter for plotting window
+  tib_plot <- tib_plot %>%
+    filter(seqnames == plot_chr,
+           start >= plot_start,
+           end <= plot_end)
+  
+  # Gather
+  tib_gather <- tib_plot %>%
+    gather(key, value, -seqnames, -start, -end) %>%
+    mutate(key = factor(key, levels = exp_names),
+           fill_column = color_groups[match(key, names(color_groups))],
+           fill_column = factor(fill_column, levels = unique(color_groups)))
+  
+  # If desired, make negative values a lighter shade to improve visualization
+  if (lighten_negative) {
+    tib_gather <- tib_gather %>%
+      mutate(fill_column = interaction(fill_column,
+                                       value < 0))
+  }
+  
+  
+  
+  # Plot
+  ylimits <- quantile(tib_gather$value, c(0.001, 0.999), na.rm = T)
+  fill_column <- NULL
+  
+  plt <- tib_gather %>% 
+    ggplot(aes(fill = fill_column))
+  
+  
+  # Set all counts tracks to the same limits
+  if (raster) {
+    plt <- plt + 
+      rasterize(geom_rect(aes(xmin = start / 1e6, xmax = end / 1e6, 
+                              ymin = 0, ymax = value)),
+                dpi = 300)
+  } else {
+    plt <- plt + 
+      geom_rect(aes(xmin = start / 1e6, xmax = end / 1e6, 
+                    ymin = 0, ymax = value))
+  }
+  
+  plt <- plt + 
+    geom_hline(yintercept = 0, size = 0.5) +
+    geom_vline(xintercept = clones.df[1,2]/1e6, size = 0.5, col = "grey") +
+    geom_vline(xintercept = clones.df[4,2]/1e6, size = 0.5, col = "grey") +
+    #geom_segment(data=clones.df, mapping=aes(x=x/1e6, xend=xend/1e6, y=y, yend=yend), size =1)+
+    #geom_segment(data=LAD_loc, mapping=aes(x=x/1e6, xend=xend/1e6, y=y, yend=yend), size =1, color = "#6BAED6")+
+    facet_grid(key ~ ., scales = "free_y") +
+    xlab(paste0(plot_chr, " (Mb)")) +
+    ylab("Change in LmnB1") +
+    scale_x_continuous(expand = c(0, 0)) + 
+    scale_y_continuous(expand = c(0.025, 0.025), limits = c(-1.5, 1.5)) +
+    theme_classic() +
+    theme(text = element_text(size = 50))
+  
+  # Centromeres
+  if (! is.null(centromeres)) {
+    centromeres.plt <- as_tibble(centromeres) %>%
+      filter(seqnames == plot_chr) %>%
+      gather(key_centromeres, value, start, end)
+    
+    plt <- plt +
+      geom_line(data = centromeres.plt, 
+                aes(x = value / 1e6, y = 0),
+                color = "black", size = 2)
+  }
+  
+  if (! is.null(color_list)) {
+    
+    if (lighten_negative) {
+      color_list <- c(color_list,
+                      lighten(color_list, amount = 0.5))
+    }
+    
+    colors <- levels(tib_gather$fill_column)
+    
+    color_list <- color_list[1:length(colors)]
+    names(color_list) <- colors
+    #colors <- recode(colors, !!!color_list)
+    
+    plt <- plt +
+      scale_fill_manual(values = color_list, guide = "none")
+  } else {
+    plt <- plt +
+      scale_fill_brewer(palette = "Set1", guide = "none")
+  }
+  
+  if (fix_yaxis) {
+    plt <- plt + 
+      coord_cartesian(xlim = c(max(c(plot_start,
+                                     min(tib_gather$start))) / 1e6,
+                               min(c(plot_end,
+                                     max(tib_gather$end))) / 1e6),
+                      ylim = ylimits)
+  } else {
+    plt <- plt + 
+      coord_cartesian(xlim = c(max(c(plot_start,
+                                     min(tib_gather$start))) / 1e6,
+                               min(c(plot_end,
+                                     max(tib_gather$end))) / 1e6))
+  }
+  
+  if (! is.null(aspect_ratio)) {
+    plt <- plt +
+      theme(aspect.ratio = aspect_ratio)
+  }
+  
+  plot(plt)
+  
+}
+
+# Plot
+PlotDataTracksLight(input_tib = T201h49r_comb_diff.gr,
+                    exp_names = c("T201h49_"),
+                    color_groups = c(T201h49_ = "T201h49_"),
+                    plot_chr = "chr9", plot_start = 109937608, plot_end = 114948158,
+                    color_list = c("#D6604D", "#4393C3"),
+                    #color_list = brewer.pal(5, "RdBu"),
+                    aspect_ratio = 1/7,
+                    smooth = 7,
+                    #fix_yaxis = F,
+                    lighten_negative = T,
+                    raster = T)
+
+# # save
+# ggsave("Fig7C_LD20230815_T201h49_LB1_diff.pdf", path = "./output/", height = 5, width = 20)
+
+```
+
+
+# Load other data
+## Load RNA-seq data
+```{r}
+counts_129 <- readRDS("/DATA/usr/l.dauban/projects/RNA-seq/2nd_round_re-sequencing/counts/counts_129.RDS")                       ###### all 129 samples from both seq runs
+counts_129_comb <- readRDS("/DATA/usr/l.dauban/projects/RNA-seq/2nd_round_re-sequencing/counts/counts_129_collapsed.RDS")        ###### sum of the 2 sequencing runs for each sample
+
+counts_CAST <- readRDS("/DATA/usr/l.dauban/projects/RNA-seq/2nd_round_re-sequencing/counts/counts_CAST.RDS")                     ###### all CAST samples from both seq runs
+counts_CAST_comb <- readRDS("/DATA/usr/l.dauban/projects/RNA-seq/2nd_round_re-sequencing/counts/counts_CAST_collapsed.RDS")      ###### sum of the 2 sequencing runs for each sample
+
+counts_merged <- readRDS("/DATA/usr/l.dauban/projects/RNA-seq/2nd_round_re-sequencing/counts/counts_merged_collapsed.RDS")       ###### comb of 129 and CAST
+
+
+genes <- import("~/mydata/projects/DATA/gencode.vM24.annotation.gtf.gz")
+genes <- genes[genes$type == "gene"]
+
+counts_merged_df <- data.frame(assay(counts_merged))
+row.names(counts_merged_df) = row.names(assay(counts_merged))
+
+```
+
+## Load LaminB1 DamID data
+```{r}
+# E1972
+LoadData <- function(samples, directory = "normalized", column = "sample", bin_size = "25kb", 
+                     results_dir = "/DATA/usr/l.dauban/projects/pA-DamID/E1972_pA-Dam_rec_clones") {
+  # Simply load the normalized values and return one GRanges object with all
+  # the data
+  #
+  # Input:
+  # * samples: samples vector
+  # * directory: directory containing the data
+  # * column: column name with the sample names
+  #
+  # Output:
+  # * GRanges with data
+ 
+  df.norm <- NULL
+ 
+  for (s in samples) {
+   
+    # Create the file path of the sample
+    df.name <- file.path(results_dir,
+                         "results_mm10_nextseq_strainspecific", directory,
+                         paste0("bin-", bin_size),
+                         paste0(s,
+                                ifelse(directory == "normalized",
+                                       ".norm.txt.gz",
+                                       ".counts.txt.gz")))
+   
+    # Read the data
+    print(df.name)
+    df <- read.table(df.name,
+                     sep = "\t", stringsAsFactors = FALSE,
+                     col.names = c("seqnames", "start", "end", s))
+   
+    # Add this to one data frame
+    if (is.null(df.norm)) {
+      df.norm <- df
+    } else {
+      df.norm <- cbind(df.norm, df[, 4], stringsAsFactors = F)
+    }
+  }
+  
+ 
+  # Add +1 to the start, as this was bed-based
+  df.norm[, 2] <- df.norm[, 2] + 1
+  
+  # Change names
+  names(df.norm)[4:ncol(df.norm)] <- samples
+ 
+  # And convert to GRanges
+  df.norm <- as(df.norm, "GRanges")
+  df.norm
+ 
+}
+
+samples_1 <- c("T201h65_LB1_CAS-25kb-combined",
+             "T201h65r12_LB1_CAS-25kb-combined",
+             "T201h65r21_LB1_CAS-25kb-combined",
+             "T48h20_LB1_CAS-25kb-combined",
+             "T48h20r16_LB1_CAS-25kb-combined")
+  
+samples_1 <- LoadData(samples_1)
+samples_1 <- samples_1 %>% as_tibble() %>% dplyr::rename(T201h65 = T201h65_LB1_CAS.25kb.combined,
+                                                     T201h65r12 = T201h65r12_LB1_CAS.25kb.combined,
+                                                     T201h65r21 = T201h65r21_LB1_CAS.25kb.combined,
+                                                     T48h20 = T48h20_LB1_CAS.25kb.combined,
+                                                     T48h20r16 = T48h20r16_LB1_CAS.25kb.combined)
+
+samples_1 <- samples_1 %>% rowwise() %>% mutate(T201h65r_comb = mean(c(T201h65r12, T201h65r21)))
+
+
+
+# E1995
+LoadData <- function(samples, directory = "normalized", column = "sample", bin_size = "25kb", 
+                     results_dir = "/DATA/usr/l.dauban/projects/pA-DamID/E1995_rec_clones_T3h153_T48h81_131") {
+  # Simply load the normalized values and return one GRanges object with all
+  # the data
+  #
+  # Input:
+  # * samples: samples vector
+  # * directory: directory containing the data
+  # * column: column name with the sample names
+  #
+  # Output:
+  # * GRanges with data
+ 
+  df.norm <- NULL
+ 
+  for (s in samples) {
+   
+    # Create the file path of the sample
+    df.name <- file.path(results_dir,
+                         "results_mm10_nextseq_strainspecific", directory,
+                         paste0("bin-", bin_size),
+                         paste0(s,
+                                ifelse(directory == "normalized",
+                                       ".norm.txt.gz",
+                                       ".counts.txt.gz")))
+   
+    # Read the data
+    print(df.name)
+    df <- read.table(df.name,
+                     sep = "\t", stringsAsFactors = FALSE,
+                     col.names = c("seqnames", "start", "end", s))
+   
+    # Add this to one data frame
+    if (is.null(df.norm)) {
+      df.norm <- df
+    } else {
+      df.norm <- cbind(df.norm, df[, 4], stringsAsFactors = F)
+    }
+  }
+  
+ 
+  # Add +1 to the start, as this was bed-based
+  df.norm[, 2] <- df.norm[, 2] + 1
+  
+  # Change names
+  names(df.norm)[4:ncol(df.norm)] <- samples
+ 
+  # And convert to GRanges
+  df.norm <- as(df.norm, "GRanges")
+  df.norm
+ 
+}
+
+samples_2 <- c("T3h153_LB1_CAS-25kb-combined",
+               "T3h153r10_LB1_CAS-25kb-combined",
+               "T48h81_LB1_CAS-25kb-combined",
+               "T48h81r18_LB1_CAS-25kb-combined")
+  
+samples_2 <- LoadData(samples_2)
+samples_2 <- samples_2 %>% as_tibble() %>% dplyr::rename(T3h153 = T3h153_LB1_CAS.25kb.combined,
+                                                         T3h153r10 = T3h153r10_LB1_CAS.25kb.combined,
+                                                         T48h81 = T48h81_LB1_CAS.25kb.combined,
+                                                         T48h81r18 = T48h81r18_LB1_CAS.25kb.combined) %>% dplyr::select(T3h153, T3h153r10, T48h81, T48h81r18)
+
+
+
+
+# E2063
+LoadData <- function(samples, directory = "normalized", column = "sample", bin_size = "25kb", 
+                     results_dir = "/DATA/usr/l.dauban/projects/pA-DamID/E2063_rec_clones_T3_T201h49_T201h143_1_LB1_K9me2/2nd_round") {
+  # Simply load the normalized values and return one GRanges object with all
+  # the data
+  #
+  # Input:
+  # * samples: samples vector
+  # * directory: directory containing the data
+  # * column: column name with the sample names
+  #
+  # Output:
+  # * GRanges with data
+ 
+  df.norm <- NULL
+ 
+  for (s in samples) {
+   
+    # Create the file path of the sample
+    df.name <- file.path(results_dir,
+                         "results_mm10_nextseq_strainspecific", directory,
+                         paste0("bin-", bin_size),
+                         paste0(s,
+                                ifelse(directory == "normalized",
+                                       ".norm.txt.gz",
+                                       ".counts.txt.gz")))
+   
+    # Read the data
+    print(df.name)
+    df <- read.table(df.name,
+                     sep = "\t", stringsAsFactors = FALSE,
+                     col.names = c("seqnames", "start", "end", s))
+   
+    # Add this to one data frame
+    if (is.null(df.norm)) {
+      df.norm <- df
+    } else {
+      df.norm <- cbind(df.norm, df[, 4], stringsAsFactors = F)
+    }
+  }
+  
+ 
+  # Add +1 to the start, as this was bed-based
+  df.norm[, 2] <- df.norm[, 2] + 1
+  
+  # Change names
+  names(df.norm)[4:ncol(df.norm)] <- samples
+ 
+  # And convert to GRanges
+  df.norm <- as(df.norm, "GRanges")
+  df.norm
+ 
+}
+
+samples_3 <- c("T201h49_LB1_CAS-25kb-combined",
+               "T201h49r7_LB1_CAS-25kb-combined",
+               "T201h49r12_LB1_CAS-25kb-combined")
+  
+samples_3 <- LoadData(samples_3)
+samples_3 <- samples_3 %>% as_tibble() %>% dplyr::rename(T201h49 = T201h49_LB1_CAS.25kb.combined,
+                                                         T201h49r7 = T201h49r7_LB1_CAS.25kb.combined,
+                                                         T201h49r12 = T201h49r12_LB1_CAS.25kb.combined)
+
+samples_3 <- samples_3 %>% rowwise() %>% mutate(T201h49r_comb = mean(c(T201h49r7, T201h49r12))) %>% dplyr::select(T201h49, T201h49r7, T201h49r12, T201h49r_comb)
+
+
+##################### comb
+samples_LB1 <- cbind(samples_1, samples_2, samples_3)
+
+```
+
+## Load H3K9me3 DamID data
+```{r}
+# E2113
+LoadData <- function(samples, directory = "normalized", column = "sample", bin_size = "25kb", 
+                     results_dir = "/DATA/usr/l.dauban/projects/pA-DamID/E2113_Del_Inv_Heterochromatin") {
+  # Simply load the normalized values and return one GRanges object with all
+  # the data
+  #
+  # Input:
+  # * samples: samples vector
+  # * directory: directory containing the data
+  # * column: column name with the sample names
+  #
+  # Output:
+  # * GRanges with data
+ 
+  df.norm <- NULL
+ 
+  for (s in samples) {
+   
+    # Create the file path of the sample
+    df.name <- file.path(results_dir,
+                         "results_mm10_nextseq_strainspecific", directory,
+                         paste0("bin-", bin_size),
+                         paste0(s,
+                                ifelse(directory == "normalized",
+                                       ".norm.txt.gz",
+                                       ".counts.txt.gz")))
+   
+    # Read the data
+    print(df.name)
+    df <- read.table(df.name,
+                     sep = "\t", stringsAsFactors = FALSE,
+                     col.names = c("seqnames", "start", "end", s))
+   
+    # Add this to one data frame
+    if (is.null(df.norm)) {
+      df.norm <- df
+    } else {
+      df.norm <- cbind(df.norm, df[, 4], stringsAsFactors = F)
+    }
+  }
+  
+ 
+  # Add +1 to the start, as this was bed-based
+  df.norm[, 2] <- df.norm[, 2] + 1
+  
+  # Change names
+  names(df.norm)[4:ncol(df.norm)] <- samples
+ 
+  # And convert to GRanges
+  df.norm <- as(df.norm, "GRanges")
+  df.norm
+ 
+}
+
+samples_4 <- c("T3h153_H3K9me3_CAS-25kb-combined",
+               "T3h153r10_H3K9me3_CAS-25kb-combined",
+               "T48h20_H3K9me3_CAS-25kb-combined",
+               "T48h20r16_H3K9me3_CAS-25kb-combined",
+               "T48h81_H3K9me3_CAS-25kb-combined",
+               "T48h81r18_H3K9me3_CAS-25kb-combined",
+               "T201h65_H3K9me3_CAS-25kb-combined",
+               "T201h65r21_H3K9me3_CAS-25kb-combined")
+  
+samples_4 <- LoadData(samples_4)
+samples_4 <- samples_4 %>% as_tibble() %>% dplyr::rename(T3h153 = T3h153_H3K9me3_CAS.25kb.combined,
+                                                         T3h153r10 = T3h153r10_H3K9me3_CAS.25kb.combined,
+                                                         T48h20 = T48h20_H3K9me3_CAS.25kb.combined,
+                                                         T48h20r16 = T48h20r16_H3K9me3_CAS.25kb.combined,
+                                                         T48h81 = T48h81_H3K9me3_CAS.25kb.combined,
+                                                         T48h81r18 = T48h81r18_H3K9me3_CAS.25kb.combined,
+                                                         T201h65 = T201h65_H3K9me3_CAS.25kb.combined,
+                                                         T201h65r21 = T201h65r21_H3K9me3_CAS.25kb.combined)
+
+
+
+# E2063
+LoadData <- function(samples, directory = "normalized", column = "sample", bin_size = "25kb", 
+                     results_dir = "/DATA/usr/l.dauban/projects/pA-DamID/E2063_rec_clones_T3_T201h49_T201h143_2_htchm") {
+  # Simply load the normalized values and return one GRanges object with all
+  # the data
+  #
+  # Input:
+  # * samples: samples vector
+  # * directory: directory containing the data
+  # * column: column name with the sample names
+  #
+  # Output:
+  # * GRanges with data
+ 
+  df.norm <- NULL
+ 
+  for (s in samples) {
+   
+    # Create the file path of the sample
+    df.name <- file.path(results_dir,
+                         "results_mm10_nextseq_strainspecific", directory,
+                         paste0("bin-", bin_size),
+                         paste0(s,
+                                ifelse(directory == "normalized",
+                                       ".norm.txt.gz",
+                                       ".counts.txt.gz")))
+   
+    # Read the data
+    print(df.name)
+    df <- read.table(df.name,
+                     sep = "\t", stringsAsFactors = FALSE,
+                     col.names = c("seqnames", "start", "end", s))
+   
+    # Add this to one data frame
+    if (is.null(df.norm)) {
+      df.norm <- df
+    } else {
+      df.norm <- cbind(df.norm, df[, 4], stringsAsFactors = F)
+    }
+  }
+  
+ 
+  # Add +1 to the start, as this was bed-based
+  df.norm[, 2] <- df.norm[, 2] + 1
+  
+  # Change names
+  names(df.norm)[4:ncol(df.norm)] <- samples
+ 
+  # And convert to GRanges
+  df.norm <- as(df.norm, "GRanges")
+  df.norm
+ 
+}
+
+samples_5 <- c("T201h49_H3K9me3_CAS-25kb-combined",
+               "T201h49r7_H3K9me3_CAS-25kb-combined",
+               "T201h49r12_H3K9me3_CAS-25kb-combined")
+  
+samples_5 <- LoadData(samples_5)
+samples_5 <- samples_5 %>% as_tibble() %>% dplyr::rename(T201h49 = T201h49_H3K9me3_CAS.25kb.combined,
+                                                         T201h49r7 = T201h49r7_H3K9me3_CAS.25kb.combined,
+                                                         T201h49r12 = T201h49r12_H3K9me3_CAS.25kb.combined) %>% rowwise() %>% mutate(T201h49r_comb = mean(c(T201h49r7, T201h49r12))) %>% dplyr::select(T201h49, T201h49r7, T201h49r12, T201h49r_comb)
+
+
+##################### comb
+samples_K9me3 <- cbind(samples_4, samples_5)
+
+
+```
+
+
+# Figure 7D - T201h65
+## Prepare
+```{r}
+# select T201h65 columns
+counts_T201h65 <- counts_merged_df[,grep('T201h65', colnames(counts_merged_df))]
+
+# replace gene_id by real gene name
+counts_T201h65$gene_id = row.names(counts_T201h65)
+counts_T201h65 = left_join(counts_T201h65, data.frame(genes), by = "gene_id")
+counts_T201h65 <- counts_T201h65 %>% filter(gene_name != "NA") %>% filter(gene_type == "protein_coding") %>% distinct(gene_name, .keep_all = TRUE)
+row.names(counts_T201h65) <- counts_T201h65$gene_name
+counts_T201h65 <- counts_T201h65[,grep('T201h65', colnames(counts_T201h65))]
+
+
+counts_T201h65[which(row.names(counts_T201h65) == "Lrrc2"),]
+
+```
+
+## Plot
+```{r}
+
+T201h65 = data.frame(start = 110927601, end = 112396323)
+
+counts_T201h65_rep <- data.frame(genes = row.names(counts_T201h65),
+                                 CAST_T201h65 = counts_T201h65$T201h65_A.CAST + counts_T201h65$T201h65_B.CAST,
+                                 CAST_T201h65r12 = counts_T201h65$T201h65r12_A.CAST + counts_T201h65$T201h65r12_B.CAST,
+                                 CAST_T201h65r21 = counts_T201h65$T201h65r21_A.CAST + counts_T201h65$T201h65r21_B.CAST,
+                                 X129S1_T201h65 = counts_T201h65$T201h65_A.129 + counts_T201h65$T201h65_B.129,
+                                 X129S1_T201h65r12 = counts_T201h65$T201h65r12_A.129 + counts_T201h65$T201h65r12_B.129,
+                                 X129S1_T201h65r21 = counts_T201h65$T201h65r21_A.129 + counts_T201h65$T201h65r21_B.129)
+
+gene.set <- genes[seqnames(genes) == "chr9" & start(genes)>110500000 & start(genes)<114700000]
+gene.set <- gene.set %>% plyranges::select(gene_name) %>% data.frame()
+
+############################ CAST allele
+# select genes and columns, add pseudocount
+CAST_T201h65r_comb_sub = counts_T201h65_rep %>% filter(genes %in% gene.set$gene_name) %>% dplyr::select(genes, grep("CAST_T201h65", colnames(counts_T201h65_rep))) %>% rowwise() %>% mutate(CAST_T201h65r_comb = sum(CAST_T201h65r12, CAST_T201h65r21)) %>% dplyr::select(genes, CAST_T201h65, CAST_T201h65r_comb) %>% rowwise() %>% mutate(CAST_T201h65 = CAST_T201h65+0.5, CAST_T201h65r_comb = CAST_T201h65r_comb+0.5)
+
+# total
+CAST_T201h65r_comb_total = counts_T201h65_rep %>% data.frame() %>% rowwise() %>% mutate(CAST_T201h65r_comb = sum(CAST_T201h65r12, CAST_T201h65r21)) %>% dplyr::select(genes, CAST_T201h65, CAST_T201h65r_comb) %>% data.frame() %>% summarise(across(where(is.integer), sum))
+
+
+# combine and generate matrix
+CAST_T201h65r_comb_matrix = cbind(CAST_T201h65r_comb_sub$CAST_T201h65, CAST_T201h65r_comb_total$CAST_T201h65, CAST_T201h65r_comb_sub$CAST_T201h65r_comb, CAST_T201h65r_comb_total$CAST_T201h65r_comb)
+row.names(CAST_T201h65r_comb_matrix) = CAST_T201h65r_comb_sub$genes
+
+# prepare Fisher test
+CAST_T201h65r_comb_matrix.df = data.frame(CAST_T201h65r_comb_matrix)
+colnames(CAST_T201h65r_comb_matrix.df) = c("Par", "Par_tot", "Rec", "Rec_tot")
+
+CAST_T201h65r_comb_matrix.df$Par_corr = as.numeric(CAST_T201h65r_comb_matrix.df$Rec_tot)*as.numeric(CAST_T201h65r_comb_matrix.df$Par)/as.numeric(CAST_T201h65r_comb_matrix.df$Par_tot)
+
+
+# Fisher test
+CAST_T201h65r_comb_test = apply(CAST_T201h65r_comb_matrix,1, function(x) fisher.test(matrix(x,nr=2))$p.value)
+
+# correct for multiple testing
+CAST_T201h65r_comb_test = CAST_T201h65r_comb_test*nrow(CAST_T201h65r_comb_matrix)
+
+# edit df and add loxP
+CAST_T201h65r_comb_matrix.df <- CAST_T201h65r_comb_matrix.df %>% mutate(FC = CAST_T201h65r_comb_matrix.df$Rec/CAST_T201h65r_comb_matrix.df$Par_corr,
+                                                                        gene_name = row.names(CAST_T201h65r_comb_matrix.df),
+                                                                        pvalue = CAST_T201h65r_comb_test[row.names(CAST_T201h65r_comb_matrix.df)]) %>% mutate(pvalue_sig = ifelse(pvalue<0.05, TRUE, FALSE))
+CAST_T201h65r_comb_matrix.df <- left_join(CAST_T201h65r_comb_matrix.df, gene.set, by = 'gene_name')
+
+loxP_row = data.frame(gene_name = c('loxP1', 'loxP2'), start = c(110927601, 112396323), Par_corr = c(10, 10), Rec = c(1, 1))
+
+CAST_T201h65r_comb_matrix.df = CAST_T201h65r_comb_matrix.df %>% rows_insert(loxP_row)
+
+
+############################ 129 allele
+# select genes and columns, add pseudocount
+X129S1_T201h65r_comb_sub = counts_T201h65_rep %>% filter(genes %in% gene.set$gene_name) %>% dplyr::select(genes, grep("X129S1_T201h65", colnames(counts_T201h65_rep))) %>% rowwise() %>% mutate(X129S1_T201h65r_comb = sum(X129S1_T201h65r12, X129S1_T201h65r21)) %>% dplyr::select(genes, X129S1_T201h65, X129S1_T201h65r_comb) %>% rowwise() %>% mutate(X129S1_T201h65 = X129S1_T201h65+0.5, X129S1_T201h65r_comb = X129S1_T201h65r_comb+0.5)
+
+# total
+X129S1_T201h65r_comb_total = counts_T201h65_rep %>% data.frame() %>% rowwise() %>% mutate(X129S1_T201h65r_comb = sum(X129S1_T201h65r12, X129S1_T201h65r21)) %>% dplyr::select(genes, X129S1_T201h65, X129S1_T201h65r_comb) %>% data.frame() %>% summarise(across(where(is.integer), sum))
+
+# combine and generate matrix
+X129S1_T201h65r_comb_matrix = cbind(X129S1_T201h65r_comb_sub$X129S1_T201h65, X129S1_T201h65r_comb_total$X129S1_T201h65, X129S1_T201h65r_comb_sub$X129S1_T201h65r_comb, X129S1_T201h65r_comb_total$X129S1_T201h65r_comb)
+row.names(X129S1_T201h65r_comb_matrix) = X129S1_T201h65r_comb_sub$genes
+
+# prepare Fisher test
+X129S1_T201h65r_comb_matrix.df = data.frame(X129S1_T201h65r_comb_matrix)
+colnames(X129S1_T201h65r_comb_matrix.df) = c("Par", "Par_tot", "Rec", "Rec_tot")
+
+X129S1_T201h65r_comb_matrix.df$Par_corr = as.numeric(X129S1_T201h65r_comb_matrix.df$Rec_tot)*as.numeric(X129S1_T201h65r_comb_matrix.df$Par)/as.numeric(X129S1_T201h65r_comb_matrix.df$Par_tot)
+
+
+# Fisher test
+X129S1_T201h65r_comb_test = apply(X129S1_T201h65r_comb_matrix,1, function(x) fisher.test(matrix(x,nr=2))$p.value)
+
+# correct for multiple testing
+X129S1_T201h65r_comb_test = X129S1_T201h65r_comb_test*nrow(X129S1_T201h65r_comb_matrix)
+
+
+# edit df
+X129S1_T201h65r_comb_matrix.df <- X129S1_T201h65r_comb_matrix.df %>% mutate(FC = X129S1_T201h65r_comb_matrix.df$Rec/X129S1_T201h65r_comb_matrix.df$Par_corr,
+                                                                            gene_name = row.names(X129S1_T201h65r_comb_matrix.df),
+                                                                            pvalue = X129S1_T201h65r_comb_test[row.names(X129S1_T201h65r_comb_matrix.df)]) %>% mutate(pvalue_sig = ifelse(pvalue<0.05, TRUE, FALSE))
+X129S1_T201h65r_comb_matrix.df <- left_join(X129S1_T201h65r_comb_matrix.df, gene.set, by = 'gene_name')
+
+
+############################ combine
+# Add allele
+CAST_T201h65r_comb_matrix.df$allele = "CAST"
+X129S1_T201h65r_comb_matrix.df$allele = "129S1"
+
+# Combine
+T201h65r_comb_matrix.df_comb = rbind(CAST_T201h65r_comb_matrix.df, X129S1_T201h65r_comb_matrix.df)
+T201h65r_comb_matrix.df_comb =  T201h65r_comb_matrix.df_comb %>% mutate(log2 = log2(FC)) %>% mutate(sig = if_else(pvalue<0.05 & abs(log2) > 1, "TRUE", "FALSE"))
+
+
+############################ add LB1 damid diff
+# compute difference
+T201h65_diff = samples_LB1 %>% as_tibble() %>% dplyr::select(seqnames, start, end, width, strand, T201h65, T201h65r_comb) %>% mutate_at(6:7, function(x) scale(x)[, 1]) %>% mutate_at(6:7, function(x) caTools::runmean(x, k = 9)) %>% mutate(diff = T201h65r_comb - T201h65) %>% dplyr::select(seqnames, start, end, diff) %>% rename_at(4, ~ "score") %>% drop_na() %>% as(., "GRanges")
+
+# add difference
+T201h65r_comb_matrix.df_comb_2 = T201h65r_comb_matrix.df_comb %>% mutate(seqnames = "chr9") %>% dplyr::select(seqnames, start, end, gene_name) %>% drop_na() %>% as(., "GRanges") %>% filter(start<T201h65$start | start > T201h65$end)
+
+ovl_T201h65 = findOverlaps(T201h65r_comb_matrix.df_comb_2, T201h65_diff)
+
+ovl_T201h65.df = data.frame(queryHits = queryHits(ovl_T201h65), subjectHits = subjectHits(ovl_T201h65)) %>% mutate(score = T201h65_diff$score[subjectHits(ovl_T201h65)]) %>% group_by(queryHits) %>% summarise(diff = mean(score))
+
+T201h65r_comb_matrix.df_comb_2$LB1_diff = ovl_T201h65.df$diff
+
+T201h65r_comb_matrix.df_comb_2 = T201h65r_comb_matrix.df_comb_2 %>% data.frame() %>% dplyr::select(gene_name, LB1_diff)
+
+T201h65r_comb_matrix.df_comb = left_join(T201h65r_comb_matrix.df_comb, T201h65r_comb_matrix.df_comb_2, by = "gene_name") %>% unique()
+
+
+############################ add K9me3 damid diff
+# compute difference
+T201h65_diff = samples_K9me3 %>% as_tibble() %>% dplyr::select(seqnames, start, end, width, strand, T201h65, T201h65r21) %>% mutate_at(6:7, function(x) scale(x)[, 1]) %>% mutate_at(6:7, function(x) caTools::runmean(x, k = 9)) %>% mutate(diff = T201h65r21 - T201h65) %>% dplyr::select(seqnames, start, end, diff) %>% rename_at(4, ~ "score") %>% drop_na() %>% as(., "GRanges")
+
+# add difference
+T201h65r_comb_matrix.df_comb_2 = T201h65r_comb_matrix.df_comb %>% mutate(seqnames = "chr9") %>% dplyr::select(seqnames, start, end, gene_name) %>% drop_na() %>% as(., "GRanges") %>% filter(start<T201h65$start | start > T201h65$end)
+
+ovl_T201h65 = findOverlaps(T201h65r_comb_matrix.df_comb_2, T201h65_diff)
+
+ovl_T201h65.df = data.frame(queryHits = queryHits(ovl_T201h65), subjectHits = subjectHits(ovl_T201h65)) %>% mutate(score = T201h65_diff$score[subjectHits(ovl_T201h65)]) %>% group_by(queryHits) %>% summarise(diff = mean(score))
+
+T201h65r_comb_matrix.df_comb_2$K9me3_diff = ovl_T201h65.df$diff
+
+T201h65r_comb_matrix.df_comb_2 = T201h65r_comb_matrix.df_comb_2 %>% data.frame() %>% dplyr::select(gene_name, K9me3_diff)
+
+T201h65r_comb_matrix.df_comb = left_join(T201h65r_comb_matrix.df_comb, T201h65r_comb_matrix.df_comb_2, by = "gene_name") %>% unique()
+
+
+############################ Plot
+T201h65r_comb_matrix.df_comb %>% data.frame() %>% filter(start <= loxP_row$start[1] | start > loxP_row$start[2]) %>% group_by(gene_name) %>% mutate(log2 = log2(FC), notegh = if_else(Par_corr < 5, "x", "")) %>%
+  ggplot(aes(x=reorder(gene_name, start), y=log2, fill = sig)) +
+  geom_col() +
+  #geom_text(aes(y=0, label = ast)) +
+  geom_text(aes(y=0, label = notegh, show.legend = F)) +
+  theme_bw() +
+  geom_vline(xintercept = c("loxP1", "loxP2")) +
+  geom_hline(yintercept = c(1, -1), linetype = "dashed", color = "grey", alpha = 0.5) +
+  labs(title = "Gene expression changes in T201h65r_comb",
+       fill = "p.value<0.05 \n|log2(FC)| > 2",
+       y = "log2(FC)") +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        text = element_text(size = 15),
+        plot.margin = margin(t = 1,  # Top margin
+                             r = 1,  # Right margin
+                             b = 1,  # Bottom margin
+                             l = 1))+
+  facet_wrap(~allele, ncol = 1) +
+  scale_fill_manual(values = c("gray", brewer.pal(9, "BuPu")[3])) +
+  scale_y_continuous(breaks = seq(-10, 2, 2))+
+  coord_cartesian(ylim = c(-6, 2)) + 
+  
+  T201h65r_comb_matrix.df_comb %>% data.frame() %>% filter(start <= loxP_row$start[1] | start > loxP_row$start[2]) %>% group_by(gene_name) %>% mutate(log2 = log2(FC)) %>%
+  ggplot(aes(x=reorder(gene_name, start), y="expression", fill = log10(Par/Par_tot * 1e6))) +
+  geom_tile() +
+  scale_fill_distiller(palette ="BuPu", direction = 1, na.value = "white") +
+  geom_vline(xintercept = c("loxP1", "loxP2")) +
+  theme_bw() + 
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.title.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.ticks.x = element_blank(),
+        text = element_text(size = 15),
+        plot.margin = margin(t = 1,  # Top margin
+                             r = 1,  # Right margin
+                             b = 1,  # Bottom margin
+                             l = 1)) +
+  labs(x = "genes",
+       y = "expression",
+       fill = "log10(TPM)") +
+  
+  T201h65r_comb_matrix.df_comb %>% filter(start <= loxP_row$start[1] | start > loxP_row$start[2]) %>% group_by(gene_name) %>%
+  ggplot(aes(x=reorder(gene_name, start), y="LB1_diff", fill = LB1_diff)) +
+  geom_tile() +
+  scale_fill_distiller(palette ="RdBu", direction = -1, na.value = "white", limits = c(-1.2,1.2)) +
+  geom_vline(xintercept = c("loxP1", "loxP2")) +
+  theme_bw() + 
+  theme(axis.text.x = element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        text = element_text(size = 15),
+        plot.margin = margin(t = 1,  # Top margin
+                             r = 1,  # Right margin
+                             b = 1,  # Bottom margin
+                             l = 1)) +
+  labs(x = "genes",
+       y = "expression",
+       fill = "∆LmnB1 \nrec-par") +
+
+    T201h65r_comb_matrix.df_comb %>% filter(start <= loxP_row$start[1] | start > loxP_row$start[2]) %>% group_by(gene_name) %>%
+  ggplot(aes(x=reorder(gene_name, start), y="K9me3_diff", fill = K9me3_diff)) +
+  geom_tile() +
+  scale_fill_distiller(palette ="BrBG", direction = 1, na.value = "white", limits = c(-1.5,1.5)) +
+  geom_vline(xintercept = c("loxP1", "loxP2")) +
+  theme_bw() + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        text = element_text(size = 15),
+        plot.margin = margin(t = 1,  # Top margin
+                             r = 1,  # Right margin
+                             b = 1,  # Bottom margin
+                             l = 1)) +
+  labs(x = "genes",
+       y = "expression",
+       fill = "∆H3K9me3 \nrec-par") +
+  
+  plot_layout(ncol=1, guides = "collect", heights = c(2,0.1, 0.1, 0.1))
+
+# ggsave("Fig7D_LD20230717_d3.pdf", path = "./output/", height = 9, width = 13)
+
+```
+
+
+# Figure 7E - T48h20
+## Prepare
+```{r}
+# select T201h65 columns
+counts_T48h20 <- counts_merged_df[,grep('T48h20', colnames(counts_merged_df))]
+
+# replace gene_id by real gene name
+counts_T48h20$gene_id = row.names(counts_T48h20)
+counts_T48h20 = left_join(counts_T48h20, data.frame(genes), by = "gene_id")
+counts_T48h20 <- counts_T48h20 %>% filter(gene_name != "NA") %>% filter(gene_type == "protein_coding") %>% distinct(gene_name, .keep_all = TRUE)
+row.names(counts_T48h20) <- counts_T48h20$gene_name
+counts_T48h20 <- counts_T48h20[,grep('T48h20', colnames(counts_T48h20))]
+
+```
+
+## Plot
+```{r}
+
+T48h20 = data.frame(start = 110927601, end = 112877498)
+
+counts_T48h20_rep <- data.frame(genes = row.names(counts_T48h20),
+                                 CAST_T48h20 = counts_T48h20$T48h20_A.CAST + counts_T48h20$T48h20_B.CAST,
+                                 CAST_T48h20r16 = counts_T48h20$T48h20r16_A.CAST + counts_T48h20$T48h20r16_B.CAST,
+                                 X129S1_T48h20 = counts_T48h20$T48h20_A.129 + counts_T48h20$T48h20_B.129,
+                                 X129S1_T48h20r16 = counts_T48h20$T48h20r16_A.129 + counts_T48h20$T48h20r16_B.129)
+
+#gene.set <- genes[seqnames(genes) == "chr9" & start(genes)>110500000 & start(genes)<114700000]
+#gene.set <- gene.set %>% plyranges::select(gene_name) %>% data.frame()
+
+############################ CAST allele
+# select genes and columns, add pseudocount
+CAST_T48h20r_comb_sub = counts_T48h20_rep %>% filter(genes %in% gene.set$gene_name) %>% dplyr::select(genes, grep("CAST_T48h20", colnames(counts_T48h20_rep))) %>% rowwise() %>% dplyr::select(genes, CAST_T48h20, CAST_T48h20r16) %>% rowwise() %>% mutate(CAST_T48h20 = CAST_T48h20+0.5, CAST_T48h20r16 = CAST_T48h20r16+0.5)
+
+# total
+CAST_T48h20r_comb_total = counts_T48h20_rep %>% data.frame() %>% dplyr::select(genes, CAST_T48h20, CAST_T48h20r16) %>% summarise(across(where(is.integer), sum))
+
+# combine and generate matrix
+CAST_T48h20r_comb_matrix = cbind(CAST_T48h20r_comb_sub$CAST_T48h20, CAST_T48h20r_comb_total$CAST_T48h20, CAST_T48h20r_comb_sub$CAST_T48h20r16, CAST_T48h20r_comb_total$CAST_T48h20r16)
+row.names(CAST_T48h20r_comb_matrix) = CAST_T48h20r_comb_sub$genes
+
+# prepare Fisher test
+CAST_T48h20r_comb_matrix.df = data.frame(CAST_T48h20r_comb_matrix)
+colnames(CAST_T48h20r_comb_matrix.df) = c("Par", "Par_tot", "Rec", "Rec_tot")
+
+CAST_T48h20r_comb_matrix.df$Par_corr = as.numeric(CAST_T48h20r_comb_matrix.df$Rec_tot)*as.numeric(CAST_T48h20r_comb_matrix.df$Par)/as.numeric(CAST_T48h20r_comb_matrix.df$Par_tot)
+
+
+# Fisher test
+CAST_T48h20r_comb_test = apply(CAST_T48h20r_comb_matrix,1, function(x) fisher.test(matrix(x,nr=2))$p.value)
+
+# correct for multiple testing
+CAST_T48h20r_comb_test = CAST_T48h20r_comb_test*nrow(CAST_T48h20r_comb_matrix)
+
+# edit df and add loxP
+CAST_T48h20r_comb_matrix.df <- CAST_T48h20r_comb_matrix.df %>% mutate(FC = CAST_T48h20r_comb_matrix.df$Rec/CAST_T48h20r_comb_matrix.df$Par_corr,
+                                                                      gene_name = row.names(CAST_T48h20r_comb_matrix.df),
+                                                                      pvalue = CAST_T48h20r_comb_test[row.names(CAST_T48h20r_comb_matrix.df)]) %>% mutate(pvalue_sig = ifelse(pvalue<0.05, TRUE, FALSE))
+CAST_T48h20r_comb_matrix.df <- left_join(CAST_T48h20r_comb_matrix.df, gene.set, by = 'gene_name')
+
+loxP_row = data.frame(gene_name = c('loxP1', 'loxP2'), start = c(110927601, 112877498), Par_corr = c(10, 10), Rec = c(1, 1))
+
+CAST_T48h20r_comb_matrix.df = CAST_T48h20r_comb_matrix.df %>% rows_insert(loxP_row)
+
+
+############################ 129 allele
+# select genes and columns, add pseudocount
+X129S1_T48h20r_comb_sub = counts_T48h20_rep %>% filter(genes %in% gene.set$gene_name) %>% dplyr::select(genes, grep("X129S1_T48h20", colnames(counts_T48h20_rep))) %>% rowwise() %>% dplyr::select(genes, X129S1_T48h20, X129S1_T48h20r16) %>% rowwise() %>% mutate(X129S1_T48h20 = X129S1_T48h20+0.5, X129S1_T48h20r16 = X129S1_T48h20r16+0.5)
+
+# total
+X129S1_T48h20r_comb_total = counts_T48h20_rep %>% data.frame() %>% dplyr::select(genes, X129S1_T48h20, X129S1_T48h20r16) %>% summarise(across(where(is.integer), sum))
+  
+# combine and generate matrix
+X129S1_T48h20r_comb_matrix = cbind(X129S1_T48h20r_comb_sub$X129S1_T48h20, X129S1_T48h20r_comb_total$X129S1_T48h20, X129S1_T48h20r_comb_sub$X129S1_T48h20r16, X129S1_T48h20r_comb_total$X129S1_T48h20r16)
+row.names(X129S1_T48h20r_comb_matrix) = X129S1_T48h20r_comb_sub$genes
+
+# prepare Fisher test
+X129S1_T48h20r_comb_matrix.df = data.frame(X129S1_T48h20r_comb_matrix)
+colnames(X129S1_T48h20r_comb_matrix.df) = c("Par", "Par_tot", "Rec", "Rec_tot")
+
+X129S1_T48h20r_comb_matrix.df$Par_corr = as.numeric(X129S1_T48h20r_comb_matrix.df$Rec_tot)*as.numeric(X129S1_T48h20r_comb_matrix.df$Par)/as.numeric(X129S1_T48h20r_comb_matrix.df$Par_tot)
+
+
+# Fisher test
+X129S1_T48h20r_comb_test = apply(X129S1_T48h20r_comb_matrix,1, function(x) fisher.test(matrix(x,nr=2))$p.value)
+
+# correct for multiple testing
+X129S1_T48h20r_comb_test = X129S1_T48h20r_comb_test*nrow(X129S1_T48h20r_comb_matrix)
+
+
+# edit df
+X129S1_T48h20r_comb_matrix.df <- X129S1_T48h20r_comb_matrix.df %>% mutate(FC = X129S1_T48h20r_comb_matrix.df$Rec/X129S1_T48h20r_comb_matrix.df$Par_corr,
+                                                                          gene_name = row.names(X129S1_T48h20r_comb_matrix.df),
+                                                                          pvalue = X129S1_T48h20r_comb_test[row.names(X129S1_T48h20r_comb_matrix.df)]) %>% mutate(pvalue_sig = ifelse(pvalue<0.05, TRUE, FALSE))
+X129S1_T48h20r_comb_matrix.df <- left_join(X129S1_T48h20r_comb_matrix.df, gene.set, by = 'gene_name')
+
+
+############################ combine
+# Add allele
+CAST_T48h20r_comb_matrix.df$allele = "CAST"
+X129S1_T48h20r_comb_matrix.df$allele = "129S1"
+
+# Combine
+T48h20r_comb_matrix.df_comb = rbind(CAST_T48h20r_comb_matrix.df, X129S1_T48h20r_comb_matrix.df)
+T48h20r_comb_matrix.df_comb =  T48h20r_comb_matrix.df_comb %>% mutate(log2 = log2(FC)) %>% mutate(sig = if_else(pvalue<0.05 & abs(log2) > 1, "TRUE", "FALSE"))
+
+
+
+############################ add LB1 damid diff
+# compute difference
+T48h20_diff = samples_LB1 %>% as_tibble() %>% dplyr::select(seqnames, start, end, width, strand, T48h20, T48h20r16) %>% mutate_at(6:7, function(x) scale(x)[, 1]) %>% mutate_at(6:7, function(x) caTools::runmean(x, k = 9)) %>% mutate(diff = T48h20r16 - T48h20) %>% dplyr::select(seqnames, start, end, diff) %>% rename_at(4, ~ "score") %>% drop_na() %>% as(., "GRanges")
+
+# add difference
+T48h20r_comb_matrix.df_comb_2 = T48h20r_comb_matrix.df_comb %>% mutate(seqnames = "chr9") %>% dplyr::select(seqnames, start, end, gene_name) %>% drop_na() %>% as(., "GRanges") %>% filter(start<T48h20$start | start > T48h20$end)
+
+ovl_T48h20 = findOverlaps(T48h20r_comb_matrix.df_comb_2, T48h20_diff)
+
+ovl_T48h20.df = data.frame(queryHits = queryHits(ovl_T48h20), subjectHits = subjectHits(ovl_T48h20)) %>% mutate(score = T48h20_diff$score[subjectHits(ovl_T48h20)]) %>% group_by(queryHits) %>% summarise(diff = mean(score))
+
+T48h20r_comb_matrix.df_comb_2$LB1_diff = ovl_T48h20.df$diff
+
+T48h20r_comb_matrix.df_comb_2 = T48h20r_comb_matrix.df_comb_2 %>% data.frame() %>% dplyr::select(gene_name, LB1_diff)
+
+T48h20r_comb_matrix.df_comb = left_join(T48h20r_comb_matrix.df_comb, T48h20r_comb_matrix.df_comb_2, by = "gene_name") %>% unique()
+
+
+
+############################ add K9me3 damid diff
+# compute difference
+T48h20_diff = samples_K9me3 %>% as_tibble() %>% dplyr::select(seqnames, start, end, width, strand, T48h20, T48h20r16) %>% mutate_at(6:7, function(x) scale(x)[, 1]) %>% mutate_at(6:7, function(x) caTools::runmean(x, k = 9)) %>% mutate(diff = T48h20r16 - T48h20) %>% dplyr::select(seqnames, start, end, diff) %>% rename_at(4, ~ "score") %>% drop_na() %>% as(., "GRanges")
+
+# add difference
+T48h20r_comb_matrix.df_comb_2 = T48h20r_comb_matrix.df_comb %>% mutate(seqnames = "chr9") %>% dplyr::select(seqnames, start, end, gene_name) %>% drop_na() %>% as(., "GRanges") %>% filter(start<T48h20$start | start > T48h20$end)
+
+ovl_T48h20 = findOverlaps(T48h20r_comb_matrix.df_comb_2, T48h20_diff)
+
+ovl_T48h20.df = data.frame(queryHits = queryHits(ovl_T48h20), subjectHits = subjectHits(ovl_T48h20)) %>% mutate(score = T48h20_diff$score[subjectHits(ovl_T48h20)]) %>% group_by(queryHits) %>% summarise(diff = mean(score))
+
+T48h20r_comb_matrix.df_comb_2$K9me3_diff = ovl_T48h20.df$diff
+
+T48h20r_comb_matrix.df_comb_2 = T48h20r_comb_matrix.df_comb_2 %>% data.frame() %>% dplyr::select(gene_name, K9me3_diff)
+
+T48h20r_comb_matrix.df_comb = left_join(T48h20r_comb_matrix.df_comb, T48h20r_comb_matrix.df_comb_2, by = "gene_name") %>% unique()
+
+
+
+
+############################ Plot
+T48h20r_comb_matrix.df_comb %>% data.frame() %>% filter(start <= loxP_row$start[1] | start > loxP_row$start[2]) %>% group_by(gene_name) %>% mutate(log2 = log2(FC), notegh = if_else(Par_corr < 5, "x", "")) %>%
+  ggplot(aes(x=reorder(gene_name, start), y=log2, fill = sig)) +
+  geom_col() +
+  #geom_text(aes(y=0, label = ast)) +
+  geom_text(aes(y=0, label = notegh, show.legend = F)) +
+  theme_bw() +
+  geom_vline(xintercept = c("loxP1", "loxP2")) +
+  geom_hline(yintercept = c(1, -1), linetype = "dashed", color = "grey", alpha = 0.5) +
+  labs(title = "Gene expression changes in T48h20r_comb",
+       fill = "p.value<0.05 \n|log2(FC)| > 2",
+       y = "log2(FC)") +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        text = element_text(size = 15),
+        plot.margin = margin(t = 1,  # Top margin
+                             r = 1,  # Right margin
+                             b = 1,  # Bottom margin
+                             l = 1))+
+  facet_wrap(~allele, ncol = 1) +
+  scale_fill_manual(values = c("gray", brewer.pal(9, "BuPu")[3])) +
+  scale_y_continuous(breaks = seq(-10, 2, 2))+
+  coord_cartesian(ylim = c(-6, 2)) + 
+  
+  T48h20r_comb_matrix.df_comb %>% data.frame() %>% filter(start <= loxP_row$start[1] | start > loxP_row$start[2]) %>% group_by(gene_name) %>% mutate(log2 = log2(FC)) %>%
+  ggplot(aes(x=reorder(gene_name, start), y="expression", fill = log10(Par/Par_tot * 1e6))) +
+  geom_tile() +
+  scale_fill_distiller(palette ="BuPu", direction = 1, na.value = "white") +
+  geom_vline(xintercept = c("loxP1", "loxP2")) +
+  theme_bw() + 
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.title.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.ticks.x = element_blank(),
+        text = element_text(size = 15),
+        plot.margin = margin(t = 1,  # Top margin
+                             r = 1,  # Right margin
+                             b = 1,  # Bottom margin
+                             l = 1)) +
+  labs(x = "genes",
+       y = "expression",
+       fill = "log10(TPM)") +
+  
+  T48h20r_comb_matrix.df_comb %>% filter(start <= loxP_row$start[1] | start > loxP_row$start[2]) %>% group_by(gene_name) %>%
+  ggplot(aes(x=reorder(gene_name, start), y="LB1_diff", fill = LB1_diff)) +
+  geom_tile() +
+  scale_fill_distiller(palette ="RdBu", direction = -1, na.value = "white", limits = c(-1.2,1.2)) +
+  geom_vline(xintercept = c("loxP1", "loxP2")) +
+  theme_bw() + 
+  theme(axis.text.x = element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        text = element_text(size = 15),
+        plot.margin = margin(t = 1,  # Top margin
+                             r = 1,  # Right margin
+                             b = 1,  # Bottom margin
+                             l = 1)) +
+  labs(x = "genes",
+       y = "expression",
+       fill = "∆LmnB1 \nrec-par") +
+
+    T48h20r_comb_matrix.df_comb %>% filter(start <= loxP_row$start[1] | start > loxP_row$start[2]) %>% group_by(gene_name) %>%
+  ggplot(aes(x=reorder(gene_name, start), y="K9me3_diff", fill = K9me3_diff)) +
+  geom_tile() +
+  scale_fill_distiller(palette ="BrBG", direction = 1, na.value = "white", limits = c(-1.5,1.5)) +
+  geom_vline(xintercept = c("loxP1", "loxP2")) +
+  theme_bw() + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        text = element_text(size = 15),
+        plot.margin = margin(t = 1,  # Top margin
+                             r = 1,  # Right margin
+                             b = 1,  # Bottom margin
+                             l = 1)) +
+  labs(x = "genes",
+       y = "expression",
+       fill = "∆H3K9me3 \nrec-par") +
+  
+  plot_layout(ncol=1, guides = "collect", heights = c(2,0.1, 0.1, 0.1))
+
+
+# ggsave("Fig7E_LD20230717_d6.pdf", path = "./output/", height = 9, width = 13)
+
+```
+
+
+# Figure 7F - T201h49
+## Prepare
+```{r}
+# select T201h65 columns
+counts_T201h49 <- counts_merged_df[,grep('T201h49', colnames(counts_merged_df))]
+
+# replace gene_id by real gene name
+counts_T201h49$gene_id = row.names(counts_T201h49)
+counts_T201h49 = left_join(counts_T201h49, data.frame(genes), by = "gene_id")
+counts_T201h49 <- counts_T201h49 %>% filter(gene_name != "NA") %>% filter(gene_type == "protein_coding") %>% distinct(gene_name, .keep_all = TRUE)
+row.names(counts_T201h49) <- counts_T201h49$gene_name
+counts_T201h49 <- counts_T201h49[,grep('T201h49', colnames(counts_T201h49))]
+
+```
+
+## Plot
+```{r}
+
+T201h49 = data.frame(start = 110927601, end = 112520473)
+
+counts_T201h49_rep <- data.frame(genes = row.names(counts_T201h49),
+                                 CAST_T201h49 = counts_T201h49$T201h49_A.CAST + counts_T201h49$T201h49_B.CAST,
+                                 CAST_T201h49r7 = counts_T201h49$T201h49r7_A.CAST + counts_T201h49$T201h49r7_B.CAST,
+                                 CAST_T201h49r12 = counts_T201h49$T201h49r12_A.CAST + counts_T201h49$T201h49r12_B.CAST,
+                                 X129S1_T201h49 = counts_T201h49$T201h49_A.129 + counts_T201h49$T201h49_B.129,
+                                 X129S1_T201h49r7 = counts_T201h49$T201h49r7_A.129 + counts_T201h49$T201h49r7_B.129,
+                                 X129S1_T201h49r12 = counts_T201h49$T201h49r12_A.129 + counts_T201h49$T201h49r12_B.129)
+
+#gene.set <- genes[seqnames(genes) == "chr9" & start(genes)>110500000 & start(genes)<114700000]
+#gene.set <- gene.set %>% plyranges::select(gene_name) %>% data.frame()
+
+############################ CAST allele
+# select genes and columns, add pseudocount
+CAST_T201h49r_comb_sub = counts_T201h49_rep %>% filter(genes %in% gene.set$gene_name) %>% dplyr::select(genes, grep("CAST_T201h49", colnames(counts_T201h49_rep))) %>% rowwise() %>% mutate(CAST_T201h49r_comb = sum(CAST_T201h49r7, CAST_T201h49r12)) %>% dplyr::select(genes, CAST_T201h49, CAST_T201h49r_comb) %>% rowwise() %>% mutate(CAST_T201h49 = CAST_T201h49+0.5, CAST_T201h49r_comb = CAST_T201h49r_comb+0.5)
+
+# total
+CAST_T201h49r_comb_total = counts_T201h49_rep %>% data.frame() %>% rowwise() %>% mutate(CAST_T201h49r_comb = sum(CAST_T201h49r7, CAST_T201h49r12)) %>% dplyr::select(genes, CAST_T201h49, CAST_T201h49r_comb) %>% data.frame() %>% summarise(across(where(is.integer), sum))
+
+
+# combine and generate matrix
+CAST_T201h49r_comb_matrix = cbind(CAST_T201h49r_comb_sub$CAST_T201h49, CAST_T201h49r_comb_total$CAST_T201h49, CAST_T201h49r_comb_sub$CAST_T201h49r_comb, CAST_T201h49r_comb_total$CAST_T201h49r_comb)
+row.names(CAST_T201h49r_comb_matrix) = CAST_T201h49r_comb_sub$genes
+
+# prepare Fisher test
+CAST_T201h49r_comb_matrix.df = data.frame(CAST_T201h49r_comb_matrix)
+colnames(CAST_T201h49r_comb_matrix.df) = c("Par", "Par_tot", "Rec", "Rec_tot")
+
+CAST_T201h49r_comb_matrix.df$Par_corr = as.numeric(CAST_T201h49r_comb_matrix.df$Rec_tot)*as.numeric(CAST_T201h49r_comb_matrix.df$Par)/as.numeric(CAST_T201h49r_comb_matrix.df$Par_tot)
+
+
+# Fisher test
+CAST_T201h49r_comb_test = apply(CAST_T201h49r_comb_matrix,1, function(x) fisher.test(matrix(x,nr=2))$p.value)
+
+# correct for multiple testing
+CAST_T201h49r_comb_test = CAST_T201h49r_comb_test*nrow(CAST_T201h49r_comb_matrix)
+
+# edit df and add loxP
+CAST_T201h49r_comb_matrix.df <- CAST_T201h49r_comb_matrix.df %>% mutate(FC = CAST_T201h49r_comb_matrix.df$Rec/CAST_T201h49r_comb_matrix.df$Par_corr,
+                                                                        gene_name = row.names(CAST_T201h49r_comb_matrix.df),
+                                                                        pvalue = CAST_T201h49r_comb_test[row.names(CAST_T201h49r_comb_matrix.df)]) %>% mutate(pvalue_sig = ifelse(pvalue<0.05, TRUE, FALSE))
+CAST_T201h49r_comb_matrix.df <- left_join(CAST_T201h49r_comb_matrix.df, gene.set, by = 'gene_name')
+
+loxP_row = data.frame(gene_name = c('loxP1', 'loxP2'), start = c(110927601, 112520473), Par_corr = c(10, 10), Rec = c(1, 1))
+
+CAST_T201h49r_comb_matrix.df = CAST_T201h49r_comb_matrix.df %>% rows_insert(loxP_row)
+
+
+############################ 129 allele
+# select genes and columns, add pseudocount
+X129S1_T201h49r_comb_sub = counts_T201h49_rep %>% filter(genes %in% gene.set$gene_name) %>% dplyr::select(genes, grep("X129S1_T201h49", colnames(counts_T201h49_rep))) %>% rowwise() %>% mutate(X129S1_T201h49r_comb = sum(X129S1_T201h49r7, X129S1_T201h49r12)) %>% dplyr::select(genes, X129S1_T201h49, X129S1_T201h49r_comb) %>% rowwise() %>% mutate(X129S1_T201h49 = X129S1_T201h49+0.5, X129S1_T201h49r_comb = X129S1_T201h49r_comb+0.5)
+
+# total
+X129S1_T201h49r_comb_total = counts_T201h49_rep %>% data.frame() %>% rowwise() %>% mutate(X129S1_T201h49r_comb = sum(X129S1_T201h49r7, X129S1_T201h49r12)) %>% dplyr::select(genes, X129S1_T201h49, X129S1_T201h49r_comb) %>% data.frame() %>% summarise(across(where(is.integer), sum))
+
+# combine and generate matrix
+X129S1_T201h49r_comb_matrix = cbind(X129S1_T201h49r_comb_sub$X129S1_T201h49, X129S1_T201h49r_comb_total$X129S1_T201h49, X129S1_T201h49r_comb_sub$X129S1_T201h49r_comb, X129S1_T201h49r_comb_total$X129S1_T201h49r_comb)
+row.names(X129S1_T201h49r_comb_matrix) = X129S1_T201h49r_comb_sub$genes
+
+# prepare Fisher test
+X129S1_T201h49r_comb_matrix.df = data.frame(X129S1_T201h49r_comb_matrix)
+colnames(X129S1_T201h49r_comb_matrix.df) = c("Par", "Par_tot", "Rec", "Rec_tot")
+
+X129S1_T201h49r_comb_matrix.df$Par_corr = as.numeric(X129S1_T201h49r_comb_matrix.df$Rec_tot)*as.numeric(X129S1_T201h49r_comb_matrix.df$Par)/as.numeric(X129S1_T201h49r_comb_matrix.df$Par_tot)
+
+
+# Fisher test
+X129S1_T201h49r_comb_test = apply(X129S1_T201h49r_comb_matrix,1, function(x) fisher.test(matrix(x,nr=2))$p.value)
+
+# correct for multiple testing
+X129S1_T201h49r_comb_test = X129S1_T201h49r_comb_test*nrow(X129S1_T201h49r_comb_matrix)
+
+
+# edit df
+X129S1_T201h49r_comb_matrix.df <- X129S1_T201h49r_comb_matrix.df %>% mutate(FC = X129S1_T201h49r_comb_matrix.df$Rec/X129S1_T201h49r_comb_matrix.df$Par_corr,
+                                                                            gene_name = row.names(X129S1_T201h49r_comb_matrix.df),
+                                                                            pvalue = X129S1_T201h49r_comb_test[row.names(X129S1_T201h49r_comb_matrix.df)]) %>% mutate(pvalue_sig = ifelse(pvalue<0.05, TRUE, FALSE))
+X129S1_T201h49r_comb_matrix.df <- left_join(X129S1_T201h49r_comb_matrix.df, gene.set, by = 'gene_name')
+
+
+############################ combine
+# Add allele
+CAST_T201h49r_comb_matrix.df$allele = "CAST"
+X129S1_T201h49r_comb_matrix.df$allele = "129S1"
+
+# Combine
+T201h49r_comb_matrix.df_comb = rbind(CAST_T201h49r_comb_matrix.df, X129S1_T201h49r_comb_matrix.df)
+T201h49r_comb_matrix.df_comb =  T201h49r_comb_matrix.df_comb %>% mutate(log2 = log2(FC)) %>% mutate(sig = if_else(pvalue<0.05 & abs(log2) > 1, "TRUE", "FALSE"))
+
+
+
+############################ add LB1 damid diff
+# compute difference
+T201h49_diff = samples_LB1 %>% as_tibble() %>% dplyr::select(seqnames, start, end, width, strand, T201h49, T201h49r_comb) %>% mutate_at(6:7, function(x) scale(x)[, 1]) %>% mutate_at(6:7, function(x) caTools::runmean(x, k = 9)) %>% mutate(diff = T201h49r_comb - T201h49) %>% dplyr::select(seqnames, start, end, diff) %>% rename_at(4, ~ "score") %>% drop_na() %>% as(., "GRanges")
+
+# add difference
+T201h49r_comb_matrix.df_comb_2 = T201h49r_comb_matrix.df_comb %>% mutate(seqnames = "chr9") %>% dplyr::select(seqnames, start, end, gene_name) %>% drop_na() %>% as(., "GRanges")
+
+ovl_T201h49 = findOverlaps(T201h49r_comb_matrix.df_comb_2, T201h49_diff)
+
+ovl_T201h49.df = data.frame(queryHits = queryHits(ovl_T201h49), subjectHits = subjectHits(ovl_T201h49)) %>% mutate(score = T201h49_diff$score[subjectHits(ovl_T201h49)]) %>% group_by(queryHits) %>% summarise(diff = mean(score))
+
+T201h49r_comb_matrix.df_comb_2$LB1_diff = ovl_T201h49.df$diff
+
+T201h49r_comb_matrix.df_comb_2 = T201h49r_comb_matrix.df_comb_2 %>% data.frame() %>% dplyr::select(gene_name, LB1_diff)
+
+T201h49r_comb_matrix.df_comb = left_join(T201h49r_comb_matrix.df_comb, T201h49r_comb_matrix.df_comb_2, by = "gene_name") %>% unique()
+
+
+
+############################ add K9me3 damid diff
+# compute difference
+T201h49_diff = samples_K9me3 %>% as_tibble() %>% dplyr::select(seqnames, start, end, width, strand, T201h49, T201h49r_comb) %>% mutate_at(6:7, function(x) scale(x)[, 1]) %>% mutate_at(6:7, function(x) caTools::runmean(x, k = 9)) %>% mutate(diff = T201h49r_comb - T201h49) %>% dplyr::select(seqnames, start, end, diff) %>% rename_at(4, ~ "score") %>% drop_na() %>% as(., "GRanges")
+
+# add difference
+T201h49r_comb_matrix.df_comb_2 = T201h49r_comb_matrix.df_comb %>% mutate(seqnames = "chr9") %>% dplyr::select(seqnames, start, end, gene_name) %>% drop_na() %>% as(., "GRanges")
+
+ovl_T201h49 = findOverlaps(T201h49r_comb_matrix.df_comb_2, T201h49_diff)
+
+ovl_T201h49.df = data.frame(queryHits = queryHits(ovl_T201h49), subjectHits = subjectHits(ovl_T201h49)) %>% mutate(score = T201h49_diff$score[subjectHits(ovl_T201h49)]) %>% group_by(queryHits) %>% summarise(diff = mean(score))
+
+T201h49r_comb_matrix.df_comb_2$K9me3_diff = ovl_T201h49.df$diff
+
+T201h49r_comb_matrix.df_comb_2 = T201h49r_comb_matrix.df_comb_2 %>% data.frame() %>% dplyr::select(gene_name, K9me3_diff)
+
+T201h49r_comb_matrix.df_comb = left_join(T201h49r_comb_matrix.df_comb, T201h49r_comb_matrix.df_comb_2, by = "gene_name") %>% unique()
+
+
+############### invert genes within the inversion
+T201h49r_comb_matrix.df_comb <- T201h49r_comb_matrix.df_comb %>% arrange(start)
+
+T201h49r_comb_matrix.df_comb_first = T201h49r_comb_matrix.df_comb %>% filter(start<=T201h49$start)
+
+T201h49r_comb_matrix.df_comb_second = T201h49r_comb_matrix.df_comb %>% filter(start>T201h49$start & start<T201h49$end)
+T201h49r_comb_matrix.df_comb_second$start = rev(T201h49r_comb_matrix.df_comb_second$start)
+
+T201h49r_comb_matrix.df_comb_third = T201h49r_comb_matrix.df_comb %>% filter(start>=T201h49$end)
+
+T201h49r_comb_matrix.df_comb_inv = rbind(T201h49r_comb_matrix.df_comb_first, T201h49r_comb_matrix.df_comb_second, T201h49r_comb_matrix.df_comb_third)
+
+
+
+############################ Plot
+T201h49r_comb_matrix.df_comb_inv %>% data.frame() %>% group_by(gene_name) %>% mutate(log2 = log2(FC), notegh = if_else(Par_corr < 5, "x", "")) %>%
+  ggplot(aes(x=reorder(gene_name, start), y=log2, fill = sig)) +
+  geom_col() +
+  #geom_text(aes(y=0, label = ast)) +
+  geom_text(aes(y=0, label = notegh), show.legend = F) +
+  theme_bw() +
+  geom_vline(xintercept = c("loxP1", "loxP2")) +
+  geom_hline(yintercept = c(1, -1), linetype = "dashed", color = "grey", alpha = 0.5) +
+  labs(title = "Gene expression changes in T201h49r_comb",
+       fill = "p.value<0.05 \n|log2(FC)| > 2",
+       y = "log2(FC)") +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        text = element_text(size = 15),
+        plot.margin = margin(t = 1,  # Top margin
+                             r = 1,  # Right margin
+                             b = 1,  # Bottom margin
+                             l = 1))+
+  facet_wrap(~allele, ncol = 1) +
+  scale_fill_manual(values = c("gray", brewer.pal(9, "BuPu")[3])) +
+  scale_y_continuous(breaks = seq(-10, 2, 2))+
+  coord_cartesian(ylim = c(-6, 2)) +
+
+  T201h49r_comb_matrix.df_comb_inv %>% data.frame() %>% group_by(gene_name) %>% mutate(log2 = log2(FC)) %>%
+  ggplot(aes(x=reorder(gene_name, start), y="expression", fill = log10(Par/Par_tot * 1e6))) +
+  geom_tile() +
+  scale_fill_distiller(palette ="BuPu", direction = 1, na.value = "white") +
+  geom_vline(xintercept = c("loxP1", "loxP2")) +
+  theme_bw() +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.title.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.ticks.x = element_blank(),
+        text = element_text(size = 15),
+        plot.margin = margin(t = 1,  # Top margin
+                             r = 1,  # Right margin
+                             b = 1,  # Bottom margin
+                             l = 1)) +
+  labs(x = "genes",
+       y = "expression",
+       fill = "log10(TPM)") +
+
+  T201h49r_comb_matrix.df_comb_inv %>% group_by(gene_name) %>%
+  ggplot(aes(x=reorder(gene_name, start), y="LB1_diff", fill = LB1_diff)) +
+  geom_tile() +
+  scale_fill_distiller(palette ="RdBu", direction = -1, na.value = "white", limits = c(-1.2,1.2)) +
+  geom_vline(xintercept = c("loxP1", "loxP2")) +
+  theme_bw() +
+  theme(axis.text.x = element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        text = element_text(size = 15),
+        plot.margin = margin(t = 1,  # Top margin
+                             r = 1,  # Right margin
+                             b = 1,  # Bottom margin
+                             l = 1)) +
+  labs(x = "genes",
+       y = "expression",
+       fill = "∆LmnB1 \nrec-par") +
+
+    T201h49r_comb_matrix.df_comb_inv %>% group_by(gene_name) %>%
+  ggplot(aes(x=reorder(gene_name, start), y="K9me3_diff", fill = K9me3_diff)) +
+  geom_tile() +
+  scale_fill_distiller(palette ="BrBG", direction = 1, na.value = "white", limits = c(-1.5,1.5)) +
+  geom_vline(xintercept = c("loxP1", "loxP2")) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        text = element_text(size = 15),
+        plot.margin = margin(t = 1,  # Top margin
+                             r = 1,  # Right margin
+                             b = 1,  # Bottom margin
+                             l = 1)) +
+  labs(x = "genes",
+       y = "expression",
+       fill = "∆H3K9me3 \nrec-par") +
+
+  plot_layout(ncol=1, guides = "collect", heights = c(1,0.1, 0.1, 0.1))
+
+# ggsave("Fig7F_LD20230717_i7.pdf", path = "./output/", height = 9, width = 13)
+
+```
+
+
+# Extended Data 10A-B - LaminB1 changes in i7 - clone r7
+```{r}
+# Import data
+T201h49r7 = rtracklayer::import("/DATA/usr/l.dauban/projects/pA-DamID/E2063_rec_clones_T3_T201h49_T201h143_1_LB1_K9me2/2nd_round/Differential_tracks/tib_T201h49r7.bw")
+
+# Invert
+T201h49r7[seqnames(T201h49r7) == "chr9" & start(T201h49r7) > clones.df[1,2] & end(T201h49r7)< clones.df[4,2]]$score <- rev(T201h49r7[seqnames(T201h49r7) == "chr9" & start(T201h49r7) > clones.df[1,2] & end(T201h49r7)< clones.df[4,2]]$score)
+
+T201h49r7 <- T201h49r7 %>% as.tibble() %>% dplyr::rename(T201h49_ = score)
+
+
+# Function
+PlotDataTracksLight <- function(input_tib, exp_names, color_groups, 
+                                centromeres = NULL, plot_chr = "chr1", 
+                                plot_start = 1, plot_end = 500e6,
+                                smooth = 1, color_list = NULL,
+                                fix_yaxis = F, aspect_ratio = NULL,
+                                lighten_negative = F, raster = F) {
+  
+  # Get the scores for the samples
+  tib_plot <- input_tib %>%
+    dplyr::select(seqnames, start, end, 
+                  all_of(exp_names))
+  
+  if (smooth > 1) {
+    tib_plot <- tib_plot %>%
+      mutate_at(vars(contains("_")), 
+                runmean, k = smooth)
+  }
+  
+  # Filter for plotting window
+  tib_plot <- tib_plot %>%
+    filter(seqnames == plot_chr,
+           start >= plot_start,
+           end <= plot_end)
+  
+  # Gather
+  tib_gather <- tib_plot %>%
+    gather(key, value, -seqnames, -start, -end) %>%
+    mutate(key = factor(key, levels = exp_names),
+           fill_column = color_groups[match(key, names(color_groups))],
+           fill_column = factor(fill_column, levels = unique(color_groups)))
+  
+  # If desired, make negative values a lighter shade to improve visualization
+  if (lighten_negative) {
+    tib_gather <- tib_gather %>%
+      mutate(fill_column = interaction(fill_column,
+                                       value < 0))
+  }
+  
+  
+  
+  # Plot
+  ylimits <- quantile(tib_gather$value, c(0.001, 0.999), na.rm = T)
+  fill_column <- NULL
+  
+  plt <- tib_gather %>% 
+    ggplot(aes(fill = fill_column))
+  
+  
+  # Set all counts tracks to the same limits
+  if (raster) {
+    plt <- plt + 
+      rasterize(geom_rect(aes(xmin = start / 1e6, xmax = end / 1e6, 
+                              ymin = 0, ymax = value)),
+                dpi = 300)
+  } else {
+    plt <- plt + 
+      geom_rect(aes(xmin = start / 1e6, xmax = end / 1e6, 
+                    ymin = 0, ymax = value))
+  }
+  
+  plt <- plt + 
+    geom_hline(yintercept = 0, size = 0.5) +
+    geom_vline(xintercept = clones.df[1,2]/1e6, size = 0.5, col = "grey") +
+    geom_vline(xintercept = clones.df[4,2]/1e6, size = 0.5, col = "grey") +
+    #geom_segment(data=clones.df, mapping=aes(x=x/1e6, xend=xend/1e6, y=y, yend=yend), size =1)+
+    #geom_segment(data=LAD_loc, mapping=aes(x=x/1e6, xend=xend/1e6, y=y, yend=yend), size =1, color = "#6BAED6")+
+    facet_grid(key ~ ., scales = "free_y") +
+    xlab(paste0(plot_chr, " (Mb)")) +
+    ylab("Change in LmnB1") +
+    scale_x_continuous(expand = c(0, 0)) + 
+    scale_y_continuous(expand = c(0.025, 0.025), limits = c(-1.5, 1.5)) +
+    theme_classic() +
+    theme(text = element_text(size = 50))
+  
+  # Centromeres
+  if (! is.null(centromeres)) {
+    centromeres.plt <- as_tibble(centromeres) %>%
+      filter(seqnames == plot_chr) %>%
+      gather(key_centromeres, value, start, end)
+    
+    plt <- plt +
+      geom_line(data = centromeres.plt, 
+                aes(x = value / 1e6, y = 0),
+                color = "black", size = 2)
+  }
+  
+  if (! is.null(color_list)) {
+    
+    if (lighten_negative) {
+      color_list <- c(color_list,
+                      lighten(color_list, amount = 0.5))
+    }
+    
+    colors <- levels(tib_gather$fill_column)
+    
+    color_list <- color_list[1:length(colors)]
+    names(color_list) <- colors
+    #colors <- recode(colors, !!!color_list)
+    
+    plt <- plt +
+      scale_fill_manual(values = color_list, guide = "none")
+  } else {
+    plt <- plt +
+      scale_fill_brewer(palette = "Set1", guide = "none")
+  }
+  
+  if (fix_yaxis) {
+    plt <- plt + 
+      coord_cartesian(xlim = c(max(c(plot_start,
+                                     min(tib_gather$start))) / 1e6,
+                               min(c(plot_end,
+                                     max(tib_gather$end))) / 1e6),
+                      ylim = ylimits)
+  } else {
+    plt <- plt + 
+      coord_cartesian(xlim = c(max(c(plot_start,
+                                     min(tib_gather$start))) / 1e6,
+                               min(c(plot_end,
+                                     max(tib_gather$end))) / 1e6))
+  }
+  
+  if (! is.null(aspect_ratio)) {
+    plt <- plt +
+      theme(aspect.ratio = aspect_ratio)
+  }
+  
+  plot(plt)
+  
+}
+
+# Plot
+PlotDataTracksLight(input_tib = T201h49r7,
+                    exp_names = c("T201h49_"),
+                    color_groups = c(T201h49_ = "T201h49_"),
+                    plot_chr = "chr9", plot_start = 109937608, plot_end = 114948158,
+                    color_list = c("#D6604D", "#4393C3"),
+                    #color_list = brewer.pal(5, "RdBu"),
+                    aspect_ratio = 1/7,
+                    smooth = 7,
+                    #fix_yaxis = F,
+                    lighten_negative = T,
+                    raster = T)
+
+# save
+# ggsave("SuppFig14AB_LD20250407_T201h49_LB1_diff.pdf", path = "./output/", height = 5, width = 20)
+
+```
+
+
+
+# Extended Data 10C - i12 
+```{r}
+# load count table
+countdata = readRDS(file = "/DATA/usr/l.dauban/projects/RNA-seq/countdata.rds")
+
+# sum the replicates
+countdata_rep = data.frame(genes = row.names(countdata),
+                           CAST_T48h20 = countdata$CAST_1_T48h20_A_RNA_seq + countdata$CAST_13_T48h20_B_RNA_seq,
+                           CAST_T48h20r16 = countdata$CAST_2_T48h20r16_A_RNA_seq + countdata$CAST_14_T48h20r16_B_RNA_seq,
+                           CAST_T201h65 = countdata$CAST_3_T201h65_A_RNA_seq + countdata$CAST_15_T201h65_B_RNA_seq,
+                           CAST_T201h65r12 = countdata$CAST_4_T201h65r12_A_RNA_seq + countdata$CAST_16_T201h65r12_B_RNA_seq,
+                           CAST_T201h65r21 = countdata$CAST_5_T201h65r21_A_RNA_seq + countdata$CAST_17_T201h65r21_B_RNA_seq,
+                           CAST_T3h153 = countdata$CAST_6_T3h153_A_RNA_seq + countdata$CAST_18_T3h153_B_RNA_seq,
+                           CAST_T3h153r10 = countdata$CAST_7_T3h153r10_A_RNA_seq + countdata$CAST_19_T3h153r10_B_RNA_seq,
+                           CAST_T48h81 = countdata$CAST_8_T48h81_A_RNA_seq + countdata$CAST_20_T48h81_B_RNA_seq,
+                           CAST_T48h81r18 = countdata$CAST_9_T48h81r18_A_RNA_seq + countdata$CAST_21_T48h81r18_B_RNA_seq,
+                           CAST_T201h49 = countdata$CAST_10_T201h49_A_RNA_seq + countdata$CAST_22_T201h49_B_RNA_seq,
+                           CAST_T201h49r7 = countdata$CAST_11_T201h49r7_A_RNA_seq + countdata$CAST_23_T201h49r7_B_RNA_seq,
+                           CAST_T201h49r12 = countdata$CAST_12_T201h49r12_A_RNA_seq + countdata$CAST_24_T201h49r12_B_RNA_seq,
+
+                           X129S1_T48h20 = countdata$X129S1_1_T48h20_A_RNA_seq + countdata$X129S1_13_T48h20_B_RNA_seq,
+                           X129S1_T48h20r16 = countdata$X129S1_2_T48h20r16_A_RNA_seq + countdata$X129S1_14_T48h20r16_B_RNA_seq,
+                           X129S1_T201h65 = countdata$X129S1_3_T201h65_A_RNA_seq + countdata$X129S1_15_T201h65_B_RNA_seq,
+                           X129S1_T201h65r12 = countdata$X129S1_4_T201h65r12_A_RNA_seq + countdata$X129S1_16_T201h65r12_B_RNA_seq,
+                           X129S1_T201h65r21 = countdata$X129S1_5_T201h65r21_A_RNA_seq + countdata$X129S1_17_T201h65r21_B_RNA_seq,
+                           X129S1_T3h153 = countdata$X129S1_6_T3h153_A_RNA_seq + countdata$X129S1_18_T3h153_B_RNA_seq,
+                           X129S1_T3h153r10 = countdata$X129S1_7_T3h153r10_A_RNA_seq + countdata$X129S1_19_T3h153r10_B_RNA_seq,
+                           X129S1_T48h81 = countdata$X129S1_8_T48h81_A_RNA_seq + countdata$X129S1_20_T48h81_B_RNA_seq,
+                           X129S1_T48h81r18 = countdata$X129S1_9_T48h81r18_A_RNA_seq + countdata$X129S1_21_T48h81r18_B_RNA_seq,
+                           X129S1_T201h49 = countdata$X129S1_10_T201h49_A_RNA_seq + countdata$X129S1_22_T201h49_B_RNA_seq,
+                           X129S1_T201h49r7 = countdata$X129S1_11_T201h49r7_A_RNA_seq + countdata$X129S1_23_T201h49r7_B_RNA_seq,
+                           X129S1_T201h49r12 = countdata$X129S1_12_T201h49r12_A_RNA_seq + countdata$X129S1_24_T201h49r12_B_RNA_seq)
+
+# table with the total counts
+total = countdata_rep %>% dplyr::select(-genes) %>% summarise(across(1:24, sum))
+
+
+##########################################################################################
+############################## T3h153 ####################################################
+##########################################################################################
+
+gene.set_LAD2 <- genes[seqnames(genes) == "chr9" & start(genes)>108500000 & start(genes)<114700000]
+gene.set_LAD2 <- gene.set_LAD2 %>% plyranges::select(gene_name) %>% data.frame()
+
+######################## CAST allele
+# Genes around the T3h153 rec region
+T3h153 = data.frame(start = 109078659, end = 110927601)
+
+# select genes and columns
+CAST_T3h153r10_sub = countdata_rep %>% filter(genes %in% gene.set_LAD2$gene_name) %>% dplyr::select(genes, grep("CAST_T3h153", colnames(countdata_rep))) %>% dplyr::select(genes, CAST_T3h153, CAST_T3h153r10) %>% rowwise() %>% mutate(CAST_T3h153 = CAST_T3h153+0.5, CAST_T3h153r10 = CAST_T3h153r10+0.5)
+
+# total
+CAST_T3h153r10_total = total %>% dplyr::select(grep("CAST_T3h153", colnames(total))) %>% dplyr::select(CAST_T3h153, CAST_T3h153r10)
+
+# combine and generate matrix
+CAST_T3h153r10_matrix = cbind(CAST_T3h153r10_sub$CAST_T3h153, CAST_T3h153r10_total$CAST_T3h153, CAST_T3h153r10_sub$CAST_T3h153r10, CAST_T3h153r10_total$CAST_T3h153r10)
+row.names(CAST_T3h153r10_matrix) = CAST_T3h153r10_sub$genes
+
+# add up or down for each gene
+CAST_T3h153r10_matrix.df = data.frame(CAST_T3h153r10_matrix)
+colnames(CAST_T3h153r10_matrix.df) = c("Par", "Par_tot", "Rec", "Rec_tot")
+
+CAST_T3h153r10_matrix.df$Par_corr = as.numeric(CAST_T3h153r10_matrix.df$Rec_tot)*as.numeric(CAST_T3h153r10_matrix.df$Par)/as.numeric(CAST_T3h153r10_matrix.df$Par_tot)
+
+
+# Fisher test
+CAST_T3h153r10_test = apply(CAST_T3h153r10_matrix,1, function(x) fisher.test(matrix(x,nr=2))$p.value)
+
+# correct for multiple testing
+CAST_T3h153r10_test = CAST_T3h153r10_test*nrow(CAST_T3h153r10_matrix)
+
+T3h153.df = data.frame(genes[seqnames(genes) == "chr9" & start(genes)>T3h153$start-1e6 & start(genes)<114640000]) %>% filter(gene_type == 'protein_coding')
+row.names(T3h153.df) = T3h153.df$gene_name
+
+
+CAST_T3h153r10_matrix.df$FC = CAST_T3h153r10_matrix.df$Rec/CAST_T3h153r10_matrix.df$Par_corr
+CAST_T3h153r10_matrix.df$gene_name = row.names(CAST_T3h153r10_matrix.df)
+CAST_T3h153r10_matrix.df$start = T3h153.df[CAST_T3h153r10_matrix.df$gene_name,'start']
+CAST_T3h153r10_matrix.df$end = T3h153.df[CAST_T3h153r10_matrix.df$gene_name,'end']
+CAST_T3h153r10_matrix.df$pvalue = CAST_T3h153r10_test[row.names(CAST_T3h153r10_matrix.df)]
+CAST_T3h153r10_matrix.df$pvalue_sig = ifelse(CAST_T3h153r10_matrix.df$pvalue<0.05, TRUE, FALSE)
+
+loxP_row = data.frame(gene_name = c('loxP1', 'loxP2'), start = c(109078659, 110927601), Par_corr = c(10, 10), Rec = c(1, 1))
+
+CAST_T3h153r10_matrix.df = CAST_T3h153r10_matrix.df %>% rows_insert(loxP_row)
+
+
+######################## 129 allele
+# select genes and columns
+X129S1_T3h153r10_sub = countdata_rep %>% filter(genes %in% gene.set_LAD2$gene_name) %>% dplyr::select(genes, grep("X129S1_T3h153", colnames(countdata_rep))) %>% dplyr::select(genes, X129S1_T3h153, X129S1_T3h153r10) %>% rowwise() %>% mutate(X129S1_T3h153 = X129S1_T3h153+0.5, X129S1_T3h153r10 = X129S1_T3h153r10+0.5)
+
+# total
+X129S1_T3h153r10_total = total %>% dplyr::select(grep("X129S1_T3h153", colnames(total))) %>% dplyr::select(X129S1_T3h153, X129S1_T3h153r10)
+
+# combine and generate matrix
+X129S1_T3h153r10_matrix = cbind(X129S1_T3h153r10_sub$X129S1_T3h153, X129S1_T3h153r10_total$X129S1_T3h153, X129S1_T3h153r10_sub$X129S1_T3h153r10, X129S1_T3h153r10_total$X129S1_T3h153r10)
+row.names(X129S1_T3h153r10_matrix) = X129S1_T3h153r10_sub$genes
+
+# add up or down for each gene
+X129S1_T3h153r10_matrix.df = data.frame(X129S1_T3h153r10_matrix)
+colnames(X129S1_T3h153r10_matrix.df) = c("Par", "Par_tot", "Rec", "Rec_tot")
+
+X129S1_T3h153r10_matrix.df$Par_corr = as.numeric(X129S1_T3h153r10_matrix.df$Rec_tot)*as.numeric(X129S1_T3h153r10_matrix.df$Par)/as.numeric(X129S1_T3h153r10_matrix.df$Par_tot)
+
+# Fisher test
+X129S1_T3h153r10_test = apply(X129S1_T3h153r10_matrix,1, function(x) fisher.test(matrix(x,nr=2))$p.value)
+
+# correct for multiple testing
+X129S1_T3h153r10_test = X129S1_T3h153r10_test*nrow(X129S1_T3h153r10_matrix)
+
+X129S1_T3h153r10_matrix.df$FC = X129S1_T3h153r10_matrix.df$Rec/X129S1_T3h153r10_matrix.df$Par_corr
+X129S1_T3h153r10_matrix.df$gene_name = row.names(X129S1_T3h153r10_matrix.df)
+X129S1_T3h153r10_matrix.df$start = T3h153.df[X129S1_T3h153r10_matrix.df$gene_name,'start']
+X129S1_T3h153r10_matrix.df$end = T3h153.df[X129S1_T3h153r10_matrix.df$gene_name,'end']
+X129S1_T3h153r10_matrix.df$pvalue = X129S1_T3h153r10_test[row.names(X129S1_T3h153r10_matrix.df)]
+X129S1_T3h153r10_matrix.df$pvalue_sig = ifelse(X129S1_T3h153r10_matrix.df$pvalue<0.05, TRUE, FALSE)
+
+
+######################## combine
+# Add allele
+CAST_T3h153r10_matrix.df$allele = "CAST"
+X129S1_T3h153r10_matrix.df$allele = "129S1"
+
+# Combine
+T3h153r10_matrix.df_comb = rbind(CAST_T3h153r10_matrix.df, X129S1_T3h153r10_matrix.df)
+T3h153r10_matrix.df_comb =  T3h153r10_matrix.df_comb %>% mutate(log2 = log2(FC)) %>% mutate(sig = if_else(pvalue<0.05 & abs(log2) > 1, "TRUE", "FALSE"))
+
+
+############################ add LB1 damid diff
+# compute difference
+T3h153r10_diff = samples_LB1 %>% as_tibble() %>% dplyr::select(seqnames, start, end, width, strand, T3h153, T3h153r10) %>% mutate_at(6:7, function(x) scale(x)[, 1]) %>% mutate_at(6:7, function(x) caTools::runmean(x, k = 9)) %>% mutate(diff = T3h153r10 - T3h153) %>% dplyr::select(seqnames, start, end, diff) %>% rename_at(4, ~ "score") %>% drop_na() %>% as(., "GRanges")
+
+# add difference
+T3h153r10_matrix.df_comb_2 = T3h153r10_matrix.df_comb %>% mutate(seqnames = "chr9") %>% dplyr::select(seqnames, start, end, gene_name) %>% drop_na() %>% as(., "GRanges")
+
+ovl_T3h153r10 = findOverlaps(T3h153r10_matrix.df_comb_2, T3h153r10_diff)
+
+ovl_T3h153r10.df = data.frame(queryHits = queryHits(ovl_T3h153r10), subjectHits = subjectHits(ovl_T3h153r10)) %>% mutate(score = T3h153r10_diff$score[subjectHits(ovl_T3h153r10)]) %>% group_by(queryHits) %>% summarise(diff = mean(score))
+
+T3h153r10_matrix.df_comb_2$LB1_diff = ovl_T3h153r10.df$diff
+
+T3h153r10_matrix.df_comb_2 = T3h153r10_matrix.df_comb_2 %>% data.frame() %>% dplyr::select(gene_name, LB1_diff)
+
+T3h153r10_matrix.df_comb = left_join(T3h153r10_matrix.df_comb, T3h153r10_matrix.df_comb_2, by = "gene_name") %>% unique()
+
+
+############################ add H3K9me3 damid diff
+# compute difference
+T3h153r10_diff = samples_K9me3 %>% as_tibble() %>% dplyr::select(seqnames, start, end, width, strand, T3h153, T3h153r10) %>% mutate_at(6:7, function(x) scale(x)[, 1]) %>% mutate_at(6:7, function(x) caTools::runmean(x, k = 9)) %>% mutate(diff = T3h153r10 - T3h153) %>% dplyr::select(seqnames, start, end, diff) %>% rename_at(4, ~ "score") %>% drop_na() %>% as(., "GRanges")
+
+# add difference
+T3h153r10_matrix.df_comb_2 = T3h153r10_matrix.df_comb %>% mutate(seqnames = "chr9") %>% dplyr::select(seqnames, start, end, gene_name) %>% drop_na() %>% as(., "GRanges")
+
+ovl_T3h153r10 = findOverlaps(T3h153r10_matrix.df_comb_2, T3h153r10_diff)
+
+ovl_T3h153r10.df = data.frame(queryHits = queryHits(ovl_T3h153r10), subjectHits = subjectHits(ovl_T3h153r10)) %>% mutate(score = T3h153r10_diff$score[subjectHits(ovl_T3h153r10)]) %>% group_by(queryHits) %>% summarise(diff = mean(score))
+
+T3h153r10_matrix.df_comb_2$K9me3_diff = ovl_T3h153r10.df$diff
+
+T3h153r10_matrix.df_comb_2 = T3h153r10_matrix.df_comb_2 %>% data.frame() %>% dplyr::select(gene_name, K9me3_diff)
+
+T3h153r10_matrix.df_comb = left_join(T3h153r10_matrix.df_comb, T3h153r10_matrix.df_comb_2, by = "gene_name") %>% unique()
+
+
+
+############### invert genes within the inversion
+
+T3h153r10_matrix.df_comb <- T3h153r10_matrix.df_comb %>% arrange(start)
+
+T3h153r10_matrix.df_comb_first = T3h153r10_matrix.df_comb %>% filter(start<=T3h153$start)
+
+T3h153r10_matrix.df_comb_second = T3h153r10_matrix.df_comb %>% filter(start>T3h153$start & start<T3h153$end)
+T3h153r10_matrix.df_comb_second$start = rev(T3h153r10_matrix.df_comb_second$start)
+
+T3h153r10_matrix.df_comb_third = T3h153r10_matrix.df_comb %>% filter(start>=T3h153$end)
+
+T3h153r10_matrix.df_comb_inv = rbind(T3h153r10_matrix.df_comb_first, T3h153r10_matrix.df_comb_second, T3h153r10_matrix.df_comb_third)
+
+# Plot
+T3h153r10_matrix.df_comb_inv %>% data.frame() %>% group_by(gene_name) %>% mutate(log2 = log2(FC), notegh = if_else(Par_corr < 5, "x", "")) %>%
+  ggplot(aes(x=reorder(gene_name, start), y=log2, fill = sig)) +
+  geom_col() +
+  #geom_text(aes(y=0, label = ast)) +
+  geom_text(aes(y=0, label = notegh, show.legend = F)) +
+  theme_bw() +
+  geom_vline(xintercept = c("loxP1", "loxP2")) +
+  geom_hline(yintercept = c(1, -1), linetype = "dashed", color = "grey", alpha = 0.5) +
+  labs(title = "Gene expression changes in T3h153r10",
+       fill = "p.value<0.05 \n|log2(FC)| > 2",
+       y = "log2(FC)") +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        text = element_text(size = 15),
+        plot.margin = margin(t = 1,  # Top margin
+                             r = 1,  # Right margin
+                             b = 1,  # Bottom margin
+                             l = 1))+
+  facet_wrap(~allele, ncol = 1) +
+  scale_fill_manual(values = c("gray", brewer.pal(9, "BuPu")[3])) +
+  scale_y_continuous(breaks = seq(-4, 4, 2))+
+  coord_cartesian(ylim = c(-4.5, 4)) +
+
+  T3h153r10_matrix.df_comb_inv %>% data.frame() %>% group_by(gene_name) %>% mutate(log2 = log2(FC)) %>%
+  ggplot(aes(x=reorder(gene_name, start), y="expression", fill = log10(Par/Par_tot * 1e6))) +
+  geom_tile() +
+  scale_fill_distiller(palette ="BuPu", direction = 1, na.value = "white") +
+  geom_vline(xintercept = c("loxP1", "loxP2")) +
+  theme_bw() +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.title.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.ticks.x = element_blank(),
+        text = element_text(size = 15),
+        plot.margin = margin(t = 1,  # Top margin
+                             r = 1,  # Right margin
+                             b = 1,  # Bottom margin
+                             l = 1)) +
+  labs(x = "genes",
+       y = "expression",
+       fill = "log10(TPM)") +
+
+  T3h153r10_matrix.df_comb_inv %>% group_by(gene_name) %>%
+  ggplot(aes(x=reorder(gene_name, start), y="LB1_diff", fill = LB1_diff)) +
+  geom_tile() +
+  scale_fill_distiller(palette ="RdBu", direction = -1, na.value = "white", limits = c(-1.2,1.2)) +
+  geom_vline(xintercept = c("loxP1", "loxP2")) +
+  theme_bw() +
+  theme(axis.text.x = element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        text = element_text(size = 15),
+        plot.margin = margin(t = 1,  # Top margin
+                             r = 1,  # Right margin
+                             b = 1,  # Bottom margin
+                             l = 1)) +
+  labs(x = "genes",
+       y = "expression",
+       fill = "∆LmnB1 \nrec-par") +
+
+  T3h153r10_matrix.df_comb_inv %>% group_by(gene_name) %>%
+  ggplot(aes(x=reorder(gene_name, start), y="K9me3_diff", fill = K9me3_diff)) +
+  geom_tile() +
+  scale_fill_distiller(palette ="BrBG", direction = 1, na.value = "white", limits = c(-1.5,1.5)) +
+  geom_vline(xintercept = c("loxP1", "loxP2")) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        text = element_text(size = 15),
+        plot.margin = margin(t = 1,  # Top margin
+                             r = 1,  # Right margin
+                             b = 1,  # Bottom margin
+                             l = 1)) +
+  labs(x = "genes",
+       y = "expression",
+       fill = "∆H3K9me3 \nrec-par") +
+
+
+  plot_layout(ncol=1, guides = "collect", heights = c(2,0.1, 0.1, 0.1))
+
+
+# ggsave("SuppFig14C_LD20230717_i12.pdf", path = "./output/", height = 9, width = 13)
+
+
+```
+
+
+# Extended Data 10C - i10
+```{r}
+
+############################ CAST
+# Genes around the T48h81 rec region
+T48h81 = data.frame(start = 109627353, end = 110927601)
+
+# select genes and columns
+CAST_T48h81r18_sub = countdata_rep %>% filter(genes %in% gene.set_LAD2$gene_name) %>% dplyr::select(genes, grep("CAST_T48h81", colnames(countdata_rep))) %>% dplyr::select(genes, CAST_T48h81, CAST_T48h81r18) %>% rowwise() %>% mutate(CAST_T48h81 = CAST_T48h81+0.5, CAST_T48h81r18 = CAST_T48h81r18+0.5)
+
+# total
+CAST_T48h81r18_total = total %>% dplyr::select(grep("CAST_T48h81", colnames(total))) %>% dplyr::select(CAST_T48h81, CAST_T48h81r18)
+
+# combine and generate matrix
+CAST_T48h81r18_matrix = cbind(CAST_T48h81r18_sub$CAST_T48h81, CAST_T48h81r18_total$CAST_T48h81, CAST_T48h81r18_sub$CAST_T48h81r18, CAST_T48h81r18_total$CAST_T48h81r18)
+row.names(CAST_T48h81r18_matrix) = CAST_T48h81r18_sub$genes
+
+# add up or down for each gene
+CAST_T48h81r18_matrix.df = data.frame(CAST_T48h81r18_matrix)
+colnames(CAST_T48h81r18_matrix.df) = c("Par", "Par_tot", "Rec", "Rec_tot")
+
+CAST_T48h81r18_matrix.df$Par_corr = as.numeric(CAST_T48h81r18_matrix.df$Rec_tot)*as.numeric(CAST_T48h81r18_matrix.df$Par)/as.numeric(CAST_T48h81r18_matrix.df$Par_tot)
+
+
+# Fisher test
+CAST_T48h81r18_test = apply(CAST_T48h81r18_matrix,1, function(x) fisher.test(matrix(x,nr=2))$p.value)
+
+# correct for multiple testing
+CAST_T48h81r18_test = CAST_T48h81r18_test*nrow(CAST_T48h81r18_matrix)
+
+T48h81.df = data.frame(genes[seqnames(genes) == "chr9" & start(genes)>T48h81$start-1e6 & start(genes)<114640000]) %>% filter(gene_type == 'protein_coding')
+row.names(T48h81.df) = T48h81.df$gene_name
+
+
+CAST_T48h81r18_matrix.df$FC = CAST_T48h81r18_matrix.df$Rec/CAST_T48h81r18_matrix.df$Par_corr
+CAST_T48h81r18_matrix.df$gene_name = row.names(CAST_T48h81r18_matrix.df)
+CAST_T48h81r18_matrix.df$start = T48h81.df[CAST_T48h81r18_matrix.df$gene_name,'start']
+CAST_T48h81r18_matrix.df$end = T48h81.df[CAST_T48h81r18_matrix.df$gene_name,'end']
+CAST_T48h81r18_matrix.df$pvalue = CAST_T48h81r18_test[row.names(CAST_T48h81r18_matrix.df)]
+CAST_T48h81r18_matrix.df$pvalue_sig = ifelse(CAST_T48h81r18_matrix.df$pvalue<0.05, TRUE, FALSE)
+
+loxP_row = data.frame(gene_name = c('loxP1', 'loxP2'), start = c(109627353, 110927601), Par_corr = c(10, 10), Rec = c(1, 1))
+
+CAST_T48h81r18_matrix.df = CAST_T48h81r18_matrix.df %>% rows_insert(loxP_row)
+
+
+
+
+############################ 129
+# select genes and columns
+X129S1_T48h81r18_sub = countdata_rep %>% filter(genes %in% gene.set_LAD2$gene_name) %>% dplyr::select(genes, grep("X129S1_T48h81", colnames(countdata_rep))) %>% dplyr::select(genes, X129S1_T48h81, X129S1_T48h81r18) %>% rowwise() %>% mutate(X129S1_T48h81 = X129S1_T48h81+0.5, X129S1_T48h81r18 = X129S1_T48h81r18+0.5)
+
+# total
+X129S1_T48h81r18_total = total %>% dplyr::select(grep("X129S1_T48h81", colnames(total))) %>% dplyr::select(X129S1_T48h81, X129S1_T48h81r18)
+
+# combine and generate matrix
+X129S1_T48h81r18_matrix = cbind(X129S1_T48h81r18_sub$X129S1_T48h81, X129S1_T48h81r18_total$X129S1_T48h81, X129S1_T48h81r18_sub$X129S1_T48h81r18, X129S1_T48h81r18_total$X129S1_T48h81r18)
+row.names(X129S1_T48h81r18_matrix) = X129S1_T48h81r18_sub$genes
+
+# add up or down for each gene
+X129S1_T48h81r18_matrix.df = data.frame(X129S1_T48h81r18_matrix)
+colnames(X129S1_T48h81r18_matrix.df) = c("Par", "Par_tot", "Rec", "Rec_tot")
+
+X129S1_T48h81r18_matrix.df$Par_corr = as.numeric(X129S1_T48h81r18_matrix.df$Rec_tot)*as.numeric(X129S1_T48h81r18_matrix.df$Par)/as.numeric(X129S1_T48h81r18_matrix.df$Par_tot)
+
+
+# Fisher test
+X129S1_T48h81r18_test = apply(X129S1_T48h81r18_matrix,1, function(x) fisher.test(matrix(x,nr=2))$p.value)
+
+# correct for multiple testing
+X129S1_T48h81r18_test = X129S1_T48h81r18_test*nrow(X129S1_T48h81r18_matrix)
+
+X129S1_T48h81r18_matrix.df$FC = X129S1_T48h81r18_matrix.df$Rec/X129S1_T48h81r18_matrix.df$Par_corr
+X129S1_T48h81r18_matrix.df$gene_name = row.names(X129S1_T48h81r18_matrix.df)
+X129S1_T48h81r18_matrix.df$start = T48h81.df[X129S1_T48h81r18_matrix.df$gene_name,'start']
+X129S1_T48h81r18_matrix.df$end = T48h81.df[X129S1_T48h81r18_matrix.df$gene_name,'end']
+X129S1_T48h81r18_matrix.df$pvalue = X129S1_T48h81r18_test[row.names(X129S1_T48h81r18_matrix.df)]
+X129S1_T48h81r18_matrix.df$pvalue_sig = ifelse(X129S1_T48h81r18_matrix.df$pvalue<0.05, TRUE, FALSE)
+
+
+######################## combine
+# Add allele
+CAST_T48h81r18_matrix.df$allele = "CAST"
+X129S1_T48h81r18_matrix.df$allele = "129S1"
+
+# Combine
+T48h81r18_matrix.df_comb = rbind(CAST_T48h81r18_matrix.df, X129S1_T48h81r18_matrix.df)
+T48h81r18_matrix.df_comb =  T48h81r18_matrix.df_comb %>% mutate(log2 = log2(FC)) %>% mutate(sig = if_else(pvalue<0.05 & abs(log2) > 1, "TRUE", "FALSE"))
+
+
+############################ add LB1 damid diff
+# compute difference
+T48h81r18_diff = samples_LB1 %>% as_tibble() %>% dplyr::select(seqnames, start, end, width, strand, T48h81, T48h81r18) %>% mutate_at(6:7, function(x) scale(x)[, 1]) %>% mutate_at(6:7, function(x) caTools::runmean(x, k = 9)) %>% mutate(diff = T48h81r18 - T48h81) %>% dplyr::select(seqnames, start, end, diff) %>% rename_at(4, ~ "score") %>% drop_na() %>% as(., "GRanges")
+
+# add difference
+T48h81r18_matrix.df_comb_2 = T48h81r18_matrix.df_comb %>% mutate(seqnames = "chr9") %>% dplyr::select(seqnames, start, end, gene_name) %>% drop_na() %>% as(., "GRanges")
+
+ovl_T48h81r18 = findOverlaps(T48h81r18_matrix.df_comb_2, T48h81r18_diff)
+
+ovl_T48h81r18.df = data.frame(queryHits = queryHits(ovl_T48h81r18), subjectHits = subjectHits(ovl_T48h81r18)) %>% mutate(score = T48h81r18_diff$score[subjectHits(ovl_T48h81r18)]) %>% group_by(queryHits) %>% summarise(diff = mean(score))
+
+T48h81r18_matrix.df_comb_2$LB1_diff = ovl_T48h81r18.df$diff
+
+T48h81r18_matrix.df_comb_2 = T48h81r18_matrix.df_comb_2 %>% data.frame() %>% dplyr::select(gene_name, LB1_diff)
+
+T48h81r18_matrix.df_comb = left_join(T48h81r18_matrix.df_comb, T48h81r18_matrix.df_comb_2, by = "gene_name") %>% unique()
+
+
+
+############################ add K9me3 damid diff
+# compute difference
+T48h81r18_diff = samples_K9me3 %>% as_tibble() %>% dplyr::select(seqnames, start, end, width, strand, T48h81, T48h81r18) %>% mutate_at(6:7, function(x) scale(x)[, 1]) %>% mutate_at(6:7, function(x) caTools::runmean(x, k = 9)) %>% mutate(diff = T48h81r18 - T48h81) %>% dplyr::select(seqnames, start, end, diff) %>% rename_at(4, ~ "score") %>% drop_na() %>% as(., "GRanges")
+
+# add difference
+T48h81r18_matrix.df_comb_2 = T48h81r18_matrix.df_comb %>% mutate(seqnames = "chr9") %>% dplyr::select(seqnames, start, end, gene_name) %>% drop_na() %>% as(., "GRanges")
+
+ovl_T48h81r18 = findOverlaps(T48h81r18_matrix.df_comb_2, T48h81r18_diff)
+
+ovl_T48h81r18.df = data.frame(queryHits = queryHits(ovl_T48h81r18), subjectHits = subjectHits(ovl_T48h81r18)) %>% mutate(score = T48h81r18_diff$score[subjectHits(ovl_T48h81r18)]) %>% group_by(queryHits) %>% summarise(diff = mean(score))
+
+T48h81r18_matrix.df_comb_2$K9me3_diff = ovl_T48h81r18.df$diff
+
+T48h81r18_matrix.df_comb_2 = T48h81r18_matrix.df_comb_2 %>% data.frame() %>% dplyr::select(gene_name, K9me3_diff)
+
+T48h81r18_matrix.df_comb = left_join(T48h81r18_matrix.df_comb, T48h81r18_matrix.df_comb_2, by = "gene_name") %>% unique()
+
+
+############### invert genes within the inversion
+T48h81r18_matrix.df_comb <- T48h81r18_matrix.df_comb %>% arrange(start)
+
+T48h81r18_matrix.df_comb_first = T48h81r18_matrix.df_comb %>% filter(start<=T48h81$start)
+
+T48h81r18_matrix.df_comb_second = T48h81r18_matrix.df_comb %>% filter(start>T48h81$start & start<T48h81$end)
+T48h81r18_matrix.df_comb_second$start = rev(T48h81r18_matrix.df_comb_second$start)
+
+T48h81r18_matrix.df_comb_third = T48h81r18_matrix.df_comb %>% filter(start>=T48h81$end)
+
+T48h81r18_matrix.df_comb_inv = rbind(T48h81r18_matrix.df_comb_first, T48h81r18_matrix.df_comb_second, T48h81r18_matrix.df_comb_third)
+
+
+# plot
+
+T48h81r18_matrix.df_comb_inv %>% data.frame() %>% group_by(gene_name) %>% mutate(log2 = log2(FC), notegh = if_else(Par_corr < 5, "x", "")) %>%
+  ggplot(aes(x=reorder(gene_name, start), y=log2, fill = sig)) +
+  geom_col() +
+  #geom_text(aes(y=0, label = ast)) +
+  geom_text(aes(y=0, label = notegh, show.legend = F)) +
+  theme_bw() +
+  geom_vline(xintercept = c("loxP1", "loxP2")) +
+  geom_hline(yintercept = c(1, -1), linetype = "dashed", color = "grey", alpha = 0.5) +
+  labs(title = "Gene expression changes in T48h81r18",
+       fill = "p.value<0.05 \n|log2(FC)| > 2",
+       y = "log2(FC)") +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        text = element_text(size = 15),
+        plot.margin = margin(t = 1,  # Top margin
+                             r = 1,  # Right margin
+                             b = 1,  # Bottom margin
+                             l = 1))+
+  facet_wrap(~allele, ncol = 1) +
+  scale_fill_manual(values = c("gray", brewer.pal(9, "BuPu")[3])) +
+  scale_y_continuous(breaks = seq(-4, 4, 2))+
+  coord_cartesian(ylim = c(-4.5, 4)) +
+
+  T48h81r18_matrix.df_comb_inv %>% data.frame() %>% group_by(gene_name) %>% mutate(log2 = log2(FC)) %>%
+  ggplot(aes(x=reorder(gene_name, start), y="expression", fill = log10(Par/Par_tot * 1e6))) +
+  geom_tile() +
+  scale_fill_distiller(palette ="BuPu", direction = 1, na.value = "white") +
+  geom_vline(xintercept = c("loxP1", "loxP2")) +
+  theme_bw() +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.title.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.ticks.x = element_blank(),
+        text = element_text(size = 15),
+        plot.margin = margin(t = 1,  # Top margin
+                             r = 1,  # Right margin
+                             b = 1,  # Bottom margin
+                             l = 1)) +
+  labs(x = "genes",
+       y = "expression",
+       fill = "log10(TPM)") +
+
+  T48h81r18_matrix.df_comb_inv %>% group_by(gene_name) %>%
+  ggplot(aes(x=reorder(gene_name, start), y="LB1_diff", fill = LB1_diff)) +
+  geom_tile() +
+  scale_fill_distiller(palette ="RdBu", direction = -1, na.value = "white", limits = c(-1.2,1.2)) +
+  geom_vline(xintercept = c("loxP1", "loxP2")) +
+  theme_bw() +
+  theme(axis.text.x = element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        text = element_text(size = 15),
+        plot.margin = margin(t = 1,  # Top margin
+                             r = 1,  # Right margin
+                             b = 1,  # Bottom margin
+                             l = 1)) +
+  labs(x = "genes",
+       y = "expression",
+       fill = "∆LmnB1 \nrec-par") +
+
+  T48h81r18_matrix.df_comb_inv %>% group_by(gene_name) %>%
+  ggplot(aes(x=reorder(gene_name, start), y="K9me3_diff", fill = K9me3_diff)) +
+  geom_tile() +
+  scale_fill_distiller(palette ="BrBG", direction = 1, na.value = "white", limits = c(-1.5,1.5)) +
+  geom_vline(xintercept = c("loxP1", "loxP2")) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        text = element_text(size = 15),
+        plot.margin = margin(t = 1,  # Top margin
+                             r = 1,  # Right margin
+                             b = 1,  # Bottom margin
+                             l = 1)) +
+  labs(x = "genes",
+       y = "expression",
+       fill = "∆H3K9me3 \nrec-par") +
+
+
+  plot_layout(ncol=1, guides = "collect", heights = c(2,0.1, 0.1, 0.1))
+
+# ggsave("SuppFig14C_LD20230717_i10.pdf", path = "./output/", height = 9, width = 13)
+
+```
+
+
+# Figure 7G - scatter plots
+```{r}
+
+T201h49r_comb_matrix.df_comb_inv$sample = "T201h49r"
+T48h20r_comb_matrix.df_comb$sample = "T48h20r16"
+T201h65r_comb_matrix.df_comb$sample = "T201h65r"
+
+loxP_row_T48h20 = data.frame(gene_name = c('loxP1', 'loxP2'), start = c(110927601, 112877498), Par_corr = c(10, 10), Rec = c(1, 1))
+loxP_row_T201h65 = data.frame(gene_name = c('loxP1', 'loxP2'), start = c(110927601, 112396323), Par_corr = c(10, 10), Rec = c(1, 1))
+
+T48h20r_comb_matrix.df_comb <- T48h20r_comb_matrix.df_comb %>% filter(start <= loxP_row_T48h20$start[1] | start > loxP_row_T48h20$start[2])
+T201h65r_comb_matrix.df_comb <- T201h65r_comb_matrix.df_comb %>% filter(start <= loxP_row_T201h65$start[1] | start > loxP_row_T201h65$start[2])
+
+
+RNA.damID.table.all = rbind(T201h49r_comb_matrix.df_comb_inv, T48h20r_comb_matrix.df_comb, T201h65r_comb_matrix.df_comb)
+
+
+T48h81r18_matrix.df_comb_inv$sample = "T48h81"
+T3h153r10_matrix.df_comb_inv$sample = "T3h153"
+
+RNA.damID.table.all.all <- RNA.damID.table.all %>% dplyr::select(-strand, -width, -seqnames) %>% rbind(T48h81r18_matrix.df_comb_inv, T3h153r10_matrix.df_comb_inv)
+
+RNA.damID.table.all.all %>% filter(start != 'NA' & K9me3_diff != 'NA') %>% filter(start != 'NA' & LB1_diff != 'NA') %>% select(Par, Par_tot, Par_corr, log2, LB1_diff, K9me3_diff, sample, allele, gene_name, pvalue, sig) %>% gather(key, value, -Par, -Par_tot, -Par_corr, -log2, -sample, -allele, -gene_name, -pvalue, -sig) %>% group_by(gene_name) %>% filter(Par_corr > 5) %>% filter(allele == "CAST") %>%
+  ggplot() +
+  geom_point(aes(x=value, y=log2, color = log10(Par/Par_tot * 1e6), label = paste(gene_name,",",sample), stroke = 0), size = 3) +
+  #scale_size(range = c(10,1)) +
+  #geom_smooth(aes(x=value, y=log2), method=lm, linewidth = 0.5) +
+  guides(size = guide_legend(reverse=TRUE)) +
+  scale_color_distiller(palette ="BuPu", direction = 1, na.value = "white") +
+  scale_size_continuous(range = c(2.5, 4.5)) +
+  geom_hline(yintercept = c(1, -1), linetype = "dashed", color = "grey", alpha = 0.5) +
+  stat_cor(aes(x=value, y=log2), method = "pearson") +
+  facet_wrap(~key)+
+  theme_bw() +
+  labs(title = "",
+       y = "log2(FC)",
+       x = "Delta (z-score)",
+       color = "log10(Ctrl expr)")
+
+# ggsave("Fig7G_LD20231219_scatter_plots.pdf", path = "./output/", height = 4, width = 8)
+
+```
+
+
+# Figure 7H - Linear model
+```{r}
+# filer for useless data
+RNA.damID.table.all.all.filt <- RNA.damID.table.all.all %>% filter(log2 != "NA") %>% filter(allele == "CAST") %>% filter(Par_corr > 5)
+
+# linear model
+lin.mod = lm(RNA.damID.table.all.all.filt$log2 ~ RNA.damID.table.all.all.filt$LB1_diff + RNA.damID.table.all.all.filt$K9me3_diff)
+
+summary(lin.mod)
+
+
+# Plot predicted vs measured
+RNA.damID.table.all.all.filt %>% mutate(lm = lin.mod$fitted.values) %>%
+  ggplot(aes(x = lm, y = log2)) +
+  geom_point() +
+  labs(x = "Predicted", y = "Measured") +
+  stat_cor(aes(x=lm, y=log2), method = "pearson") +
+  #geom_smooth(aes(x=lm, y=log2), method=lm, linewidth = 0.5) +
+  theme_bw()
+
+
+# Plots weights
+x = data.frame(cov = c("LB1_diff", "K9me3_diff"),
+               values = c(lin.mod$coefficients[2], lin.mod$coefficients[3]))
+
+ggplot(x, aes(x=cov, y=values))+
+  geom_col()+
+  labs(x= "",
+       y="weight")+
+  theme_bw()
+
+# ggsave("Fig7H_LD20230717_linear_model.pdf", path = "./output/", height = 3, width = 3)
+
+```
+
+

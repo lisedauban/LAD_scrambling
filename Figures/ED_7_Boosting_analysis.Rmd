@@ -1,0 +1,849 @@
+---
+title: "ED_7_Boosting_analysis"
+date: "2023-11-28"
+output: 
+  html_document:
+    theme: journal #cerulean
+    highlight: monochrome
+    toc: true
+    toc_float: true
+    code_folding: show
+  editor_options:
+    chunk_output_type: console
+---
+
+Scripts for all figures in the paper.
+This is Extended Data 7
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Load all libraries
+```{r}
+library(tidyverse)
+library(ggplot2)
+library(ggbeeswarm)
+library(ggsignif)
+library(seqinr)
+library(Biostrings)
+library(gtools)
+library(magrittr)
+library(dplyr)
+library(readr)
+library(stringr)
+library(tidyr)
+library(tibble)
+library(RColorBrewer)
+library(data.table)
+
+library(IRanges)
+library(GenomeInfoDb)
+library(GenomicRanges)
+library(rtracklayer)
+library(XVector)
+library(biostrext)
+
+library(rcartocolor)
+library(ggrastr)
+library(stringi)
+
+```
+
+
+# Extended Data 7A - TF in Boosting regions
+```{r}
+# I use the Boosting_regions_number.txt file to which I add data for the 3 new regions:
+  #/DATA/usr/v.franceschini/Workspaces/2023_11_LISE_MOTIFS_IN_LBR/01_MOTIFSCAN_TOOL/02_OUTPUTS/vf231212_LAD1_1_w0
+  #/DATA/usr/v.franceschini/Workspaces/2023_11_LISE_MOTIFS_IN_LBR/01_MOTIFSCAN_TOOL/02_OUTPUTS/vf231212_LAD1_2_w0
+  #/DATA/usr/v.franceschini/Workspaces/2023_11_LISE_MOTIFS_IN_LBR/01_MOTIFSCAN_TOOL/02_OUTPUTS/vf231212_LAD2_1_w0
+
+
+data <- read_table("/DATA/usr/l.dauban/projects/TF_motifs_in_boosting_regions/Boosting_regions_number_2.txt")
+
+size = data %>% filter(region == "LAD1_1" | region == "LAD1_2") %>% mutate(size = end - start) %>% select(size) %>% summarise(n=sum(size))
+
+data.comb <- data %>% filter(region == "LAD1_1" | region == "LAD1_2") %>% mutate(size = end - start) %>% select(HMGA1, GAGA.1, GAGA.2, YY1.1, YY1.2, ZBT7B, region) %>% mutate(region = "LAD1") %>% group_by(region) %>% summarise(across(everything(), sum)) %>% mutate(chr = "chr9", start = 0, end = size$n)
+
+data.comb <- bind_rows(data, data.comb) %>% filter(region == "R4-5" | region == "LAD1" | region == "LAD2_2" | region == "LAD2_1") %>% mutate(region = factor(region, levels = c("R4-5", "LAD1", "LAD2_2", "LAD2_1")))
+
+data.norm <- data.comb %>% mutate(size = end - start) %>% rowwise() %>% mutate(HMGA.norm = 1e6*HMGA1/size,
+                                                                          GAGA.1.norm = 1e6*GAGA.1/size,
+                                                                          GAGA.2.norm = 1e6*GAGA.2/size,
+                                                                          YY1.1.norm = 1e6*YY1.1/size,
+                                                                          YY1.2.norm = 1e6*YY1.2/size,
+                                                                          ZBT7B.norm = 1e6*ZBT7B/size) %>% select(chr, start, end, HMGA.norm, GAGA.1.norm, GAGA.2.norm, YY1.1.norm, YY1.2.norm, ZBT7B.norm, region, size)
+
+data.norm %>% select(chr, start, end, GAGA.1.norm, YY1.1.norm, ZBT7B.norm, region) %>% gather(key = 'TF', value = 'number', -chr, -start, -end, -region) %>%
+  ggplot(aes(x = region, y = number)) +
+  geom_col(aes(fill = region), show.legend = "none") +
+  facet_wrap(~ TF, scales = "free") +
+  #geom_signif(test = "wilcox.test", test.args = list(alternative = c("two.sided")), comparisons = list(c("R2-3", "R4-5"), c("R2-3", "LAD2")), y_position = c(1, 3.5)) +
+  scale_fill_manual(values = c("#1B899B", "#A6CEE2","#1B899B", "#A6CEE2")) +
+  scale_y_continuous(expand = expansion(mult = c(0.15))) +
+  labs(y = "count/Mb",
+       x = '') +
+  theme_bw()+
+  theme(axis.text.x=element_text(angle = 45, hjust = 1))
+
+# ggsave("FigS11A_LD20231212_TF_boosting.pdf", path = "./output/", height = 3, width = 9)
+
+```
+
+
+# Extended Data 7B - TFLAD vs iLAD
+```{r}
+# I used the sites_number files from "/DATA/usr/v.franceschini/Workspaces/2023_11_LISE_MOTIFS_IN_LBR/01_MOTIFSCAN_TOOL/02_OUTPUTS/vf231115_LAD_vs_iLAD_w0" and "/DATA/usr/v.franceschini/Workspaces/2023_11_LISE_MOTIFS_IN_LBR/01_MOTIFSCAN_TOOL/02_OUTPUTS/vf231115_iLAD_vs_LAD_w0" to create a table with LADs and iLADs
+
+LAD_iLAD <- read_table("/DATA/usr/l.dauban/projects/TF_motifs_in_boosting_regions/LAD_vs_iLAD.txt")
+
+LAD_iLAD.norm <- LAD_iLAD %>% mutate(size = end - start) %>% rowwise() %>% mutate(GAGA.1.norm = 1e6*GAGA.1/size,
+                                                                                  YY1.1.norm = 1e6*YY1.1/size,
+                                                                                  ZBT7B.norm = 1e6*ZBT7B/size) %>% select(chr, start, end, GAGA.1.norm, YY1.1.norm, ZBT7B.norm, region, size)
+
+LAD_iLAD.norm %>% mutate(region = factor(region, levels = c("LAD", "iLAD"))) %>% gather(key = 'TF', value = 'number', -chr, -start, -end, -region, -size) %>% mutate(TF = factor(TF, levels = c('ZBT7B.norm', 'GAGA.1.norm', 'YY1.1.norm'))) %>%
+  ggplot(aes(x = region, y = number)) +
+  geom_violin(aes(color = region), show.legend = "none") +
+  geom_beeswarm(aes(color = region), cex = 0.5, alpha = 0.1, priority ="random", size = 1, show.legend = "none") +
+  stat_summary(fun=median, geom="crossbar", width=0.5, size = 0.2, color = "black", show.legend = "none")+
+  facet_wrap(~ TF, scales = "free") +
+  geom_signif(test = "wilcox.test", test.args = list(alternative = c("two.sided")), comparisons = list(c("LAD", "iLAD"))) +
+  scale_y_continuous(expand = expansion(mult = c(0.15))) +
+  scale_color_manual(values = c("#A6CEE2", "#F4C374")) +
+  labs(y = "Number of TF binding site per region, per Mb",
+       x = '') +
+  theme_bw()
+
+
+# ggsave("FigS11B_LD20231128_TF_LAD.pdf", path = "./output/", height = 3, width = 9)
+
+```
+
+
+# Extended Data 7C - rmes fold change
+## LAD1
+```{r}
+# Load data
+R45_10 <- read.table("/DATA/usr/l.dauban/projects/FIMO/LD20240605_rmes/All_Input/R45_10_p copy.txt", header = TRUE, sep = '|')
+LAD1_10 <- read.table("/DATA/usr/l.dauban/projects/FIMO/LD20240605_rmes/All_Input/LAD1_10_p copy.txt", header = TRUE, sep = '|')
+
+# combine the counts
+comb_score_10 <- R45_10 %>% select(word, score) %>% dplyr::rename(score_R45 = score) %>% full_join(LAD1_10 %>% select(word, score) %>% dplyr::rename(score_LAD1 = score))
+
+LAD1_comb_10 <- R45_10 %>% select(word, count) %>% dplyr::rename(count_R45 = count) %>% full_join(LAD1_10 %>% select(word, count) %>% dplyr::rename(count_LAD1 = count)) %>% mutate(sum_R45 = sum(count_R45), sum_LAD1 = sum(count_LAD1)) %>% relocate(sum_R45, .after = count_R45)
+
+# check that the counts match the maximum number of counts possible
+length_R45 <- 196492
+length_LAD1 <-1883507
+
+R45_counts_10 <- length_R45 -9
+LAD1_counts_10 <- length_LAD1 -9
+
+isTRUE(unique(LAD1_comb_10$sum_R45) == R45_counts_10)
+isTRUE(unique(LAD1_comb_10$sum_LAD1) == LAD1_counts_10)
+
+# Fisher test
+LAD1_comb_10 <- LAD1_comb_10 %>% mutate(pval = LAD1_comb_10 %>% select(-word) %>% apply(.,1, function(x) fisher.test(matrix(x,nr=2))$p.value)) %>% mutate(pval_adj = pval*nrow(.)) %>% full_join(comb_score_10)
+LAD1_comb_10 <- LAD1_comb_10 %>% rowwise() %>% mutate(R45_norm = count_R45*sum_LAD1/sum_R45) %>% mutate(R45_enrich = ifelse(R45_norm > count_LAD1, "TRUE", "FALSE"))
+LAD1_comb_10 <- LAD1_comb_10 %>% mutate(FC_pseudo = (R45_norm+0.00001)/(count_LAD1+0.00001), sig = ifelse(pval_adj < 0.05, "TRUE", "FALSE")) 
+
+# plot
+new_r <- data.frame(word = ' ', FC_pseudo = 1, pval_adj = 0)
+
+LAD1_comb_10 %>% rows_insert(new_r) %>% filter(pval_adj < 0.05) %>%
+  ggplot(aes(x=reorder(word,log2(FC_pseudo)), y=log2(FC_pseudo))) + 
+    geom_col() + 
+    geom_hline(yintercept = c(1, -1), linetype = "dashed", alpha = 0.5) +
+    labs(title = "LAD1 - all significant oligos - 10 mers",
+         x = "",
+         y = "log2(FC)") +
+    coord_cartesian(ylim = c(-25, 22)) +
+    theme_bw() +
+    theme(axis.text.x = element_text(angle = 45, vjust=1.1, hjust=1, size = 12))
+
+
+# ggsave("FigS11C_LD20241120_LAD1.pdf", path = "./output/", width = 12)
+
+```
+
+## LAD2
+```{r}
+# Load data
+LAD2_nr_10 <- read.table("/DATA/usr/l.dauban/projects/FIMO/LD20240605_rmes/All_Input/LAD2_nr_10_p copy.txt", header = TRUE, sep = '|')
+LAD2_10 <- read.table("/DATA/usr/l.dauban/projects/FIMO/LD20240605_rmes/All_Input/LAD2_10_p copy.txt", header = TRUE, sep = '|')
+
+# combine the counts
+comb_score_10 <- LAD2_nr_10 %>% select(word, score) %>% dplyr::rename(score_LAD2_nr = score) %>% full_join(LAD2_10 %>% select(word, score) %>% dplyr::rename(score_LAD2 = score))
+
+LAD2_comb_10 <- LAD2_nr_10 %>% select(word, count) %>% dplyr::rename(count_LAD2_nr = count) %>% full_join(LAD2_10 %>% select(word, count) %>% dplyr::rename(count_LAD2 = count)) %>% mutate(sum_LAD2_nr = sum(count_LAD2_nr), sum_LAD2 = sum(count_LAD2)) %>% relocate(sum_LAD2_nr, .after = count_LAD2_nr)
+
+# check that the counts match the maximum number of counts possible
+length_LAD2_nr <- 142370
+length_LAD2 <-207352
+
+LAD2_nr_counts_10 <- length_LAD2_nr -9
+LAD2_counts_10 <- length_LAD2 -9
+
+isTRUE(unique(LAD2_comb_10$sum_LAD2_nr) == LAD2_nr_counts_10)
+isTRUE(unique(LAD2_comb_10$sum_LAD2) == LAD2_counts_10)
+
+# Fisher test
+LAD2_comb_10 <- LAD2_comb_10 %>% mutate(pval = LAD2_comb_10 %>% select(-word) %>% apply(.,1, function(x) fisher.test(matrix(x,nr=2))$p.value)) %>% mutate(pval_adj = pval*nrow(.)) %>% full_join(comb_score_10)
+LAD2_comb_10 <- LAD2_comb_10 %>% rowwise() %>% mutate(LAD2_nr_norm = count_LAD2_nr*sum_LAD2/sum_LAD2_nr) %>% mutate(LAD2_nr_enrich = ifelse(LAD2_nr_norm > count_LAD2, "TRUE", "FALSE"))
+LAD2_comb_10 <- LAD2_comb_10 %>% mutate(FC_pseudo = (LAD2_nr_norm+0.00001)/(count_LAD2+0.00001), sig = ifelse(pval_adj < 0.05, "TRUE", "FALSE")) 
+
+
+# plot
+new_r_LAD2 <- data.frame(word = c("", as.character(1:32)), FC_pseudo = c(1, seq(0, 0, length.out = 32)) , pval_adj = 0.03)
+
+LAD2_comb_10 %>% rows_insert(new_r_LAD2) %>% filter(pval_adj < 0.05) %>% 
+  ggplot(aes(x=reorder(word,log2(FC_pseudo)), y=log2(FC_pseudo))) + 
+    geom_col() + 
+    geom_hline(yintercept = c(1, -1), linetype = "dashed", alpha = 0.5) +
+    labs(title = "LAD2 - all significant oligos LAD2 - 10 mers",
+         x = "",
+         y = "log2(FC)") +
+    coord_cartesian(ylim = c(-25, 22)) +
+    theme_bw() +
+    theme(axis.text.x = element_text(angle = 45, vjust=1.1, hjust=1, size = 12))
+
+# ggsave("FigS11C_LD20241120_LAD2.pdf", path = "./output/", width = 12)
+
+```
+
+
+# Extended Data 7D - rmes location
+```{r}
+# Load data
+R45 <- readDNAStringSet("/DATA/usr/l.dauban/projects/FIMO/LD20240605_rmes/All_Input/R45.fa")
+
+# compute the number of counts for each motif
+p1 <- vmatchPattern(c("actaaactaa"), R45, max.mismatch=0, fixed=FALSE) %>% data.frame() %>% mutate(pattern = "actaaactaa")
+p2 <- vmatchPattern(c("acactgcaca"), R45, max.mismatch=0, fixed=FALSE) %>% data.frame() %>% mutate(pattern = "acactgcaca")
+p3 <- vmatchPattern(c("tgctgtgctg"), R45, max.mismatch=0, fixed=FALSE) %>% data.frame() %>% mutate(pattern = "tgctgtgctg")
+p4 <- vmatchPattern(c("tccacactgc"), R45, max.mismatch=0, fixed=FALSE) %>% data.frame() %>% mutate(pattern = "tccacactgc")
+p5 <- vmatchPattern(c("tctgttctgt"), R45, max.mismatch=0, fixed=FALSE) %>% data.frame() %>% mutate(pattern = "tctgttctgt")
+p6 <- vmatchPattern(c("gttctgttct"), R45, max.mismatch=0, fixed=FALSE) %>% data.frame() %>% mutate(pattern = "gttctgttct")
+p7 <- vmatchPattern(c("aactaaacta"), R45, max.mismatch=0, fixed=FALSE) %>% data.frame() %>% mutate(pattern = "aactaaacta")
+p8 <- vmatchPattern(c("ttctgttctg"), R45, max.mismatch=0, fixed=FALSE) %>% data.frame() %>% mutate(pattern = "ttctgttctg")
+p9 <- vmatchPattern(c("gtgctgtgct"), R45, max.mismatch=0, fixed=FALSE) %>% data.frame() %>% mutate(pattern = "gtgctgtgct")
+p10 <- vmatchPattern(c("ctgttctgtt"), R45, max.mismatch=0, fixed=FALSE) %>% data.frame() %>% mutate(pattern = "ctgttctgtt")
+p11 <- vmatchPattern(c("ttctcttttc"), R45, max.mismatch=0, fixed=FALSE) %>% data.frame() %>% mutate(pattern = "ttctcttttc")
+p12 <- vmatchPattern(c("gctgtgctgt"), R45, max.mismatch=0, fixed=FALSE) %>% data.frame() %>% mutate(pattern = "gctgtgctgt")
+p13 <- vmatchPattern(c("cccttccctt"), R45, max.mismatch=0, fixed=FALSE) %>% data.frame() %>% mutate(pattern = "cccttccctt")
+p14 <- vmatchPattern(c("ctcttctctt"), R45, max.mismatch=0, fixed=FALSE) %>% data.frame() %>% mutate(pattern = "ctcttctctt")
+p15 <- vmatchPattern(c("ttcccttccc"), R45, max.mismatch=0, fixed=FALSE) %>% data.frame() %>% mutate(pattern = "ttcccttccc")
+p16 <- vmatchPattern(c("atccacactg"), R45, max.mismatch=0, fixed=FALSE) %>% data.frame() %>% mutate(pattern = "atccacactg")
+p17 <- vmatchPattern(c("ctgtgctgtg"), R45, max.mismatch=0, fixed=FALSE) %>% data.frame() %>% mutate(pattern = "ctgtgctgtg")
+p18 <- vmatchPattern(c("tgttctgttc"), R45, max.mismatch=0, fixed=FALSE) %>% data.frame() %>% mutate(pattern = "tgttctgttc")
+p19 <- vmatchPattern(c("tctcttttct"), R45, max.mismatch=0, fixed=FALSE) %>% data.frame() %>% mutate(pattern = "tctcttttct")
+p20 <- vmatchPattern(c("tgtgctgtgc"), R45, max.mismatch=0, fixed=FALSE) %>% data.frame() %>% mutate(pattern = "tgtgctgtgc")
+p21 <- vmatchPattern(c("ctcttttctc"), R45, max.mismatch=0, fixed=FALSE) %>% data.frame() %>% mutate(pattern = "ctcttttctc")
+p22 <- vmatchPattern(c("tttctctttt"), R45, max.mismatch=0, fixed=FALSE) %>% data.frame() %>% mutate(pattern = "tttctctttt")
+p23 <- vmatchPattern(c("tcttttctct"), R45, max.mismatch=0, fixed=FALSE) %>% data.frame() %>% mutate(pattern = "tcttttctct")
+p24 <- vmatchPattern(c("cttttctctt"), R45, max.mismatch=0, fixed=FALSE) %>% data.frame() %>% mutate(pattern = "cttttctctt")
+p25 <- vmatchPattern(c("tcttctcttc"), R45, max.mismatch=0, fixed=FALSE) %>% data.frame() %>% mutate(pattern = "tcttctcttc")
+p26 <- vmatchPattern(c("tctcttctct"), R45, max.mismatch=0, fixed=FALSE) %>% data.frame() %>% mutate(pattern = "tctcttctct")
+p27 <- vmatchPattern(c("ttttctcttt"), R45, max.mismatch=0, fixed=FALSE) %>% data.frame() %>% mutate(pattern = "ttttctcttt")
+p28 <- vmatchPattern(c("agggagaggg"), R45, max.mismatch=0, fixed=FALSE) %>% data.frame() %>% mutate(pattern = "agggagaggg")
+p29 <- vmatchPattern(c("gagggagagg"), R45, max.mismatch=0, fixed=FALSE) %>% data.frame() %>% mutate(pattern = "gagggagagg")
+p30 <- vmatchPattern(c("gagagggaga"), R45, max.mismatch=0, fixed=FALSE) %>% data.frame() %>% mutate(pattern = "gagagggaga")
+p31 <- vmatchPattern(c("gggagaggga"), R45, max.mismatch=0, fixed=FALSE) %>% data.frame() %>% mutate(pattern = "gggagaggga")
+p32 <- vmatchPattern(c("ggagagggag"), R45, max.mismatch=0, fixed=FALSE) %>% data.frame() %>% mutate(pattern = "ggagagggag")
+p33 <- vmatchPattern(c("agagggagag"), R45, max.mismatch=0, fixed=FALSE) %>% data.frame() %>% mutate(pattern = "agagggagag")
+
+
+# combine
+comb_p <- rbind(p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19, p20, p21, p22, p23, p24, p25, p26, p27, p28, p29, p30, p31, p32, p33) %>% mutate(pattern = factor(pattern, levels = c("actaaactaa", "acactgcaca", "tgctgtgctg", "tccacactgc", "tctgttctgt", "gttctgttct", "aactaaacta", "ttctgttctg", "gtgctgtgct", "ctgttctgtt", "ttctcttttc", "gctgtgctgt", "cccttccctt", "ctcttctctt", "ttcccttccc", "atccacactg","ctgtgctgtg", "tgttctgttc", "tctcttttct", "tgtgctgtgc", "ctcttttctc", "tttctctttt", "tcttttctct", "cttttctctt", "tcttctcttc", "tctcttctct", "ttttctcttt", 
+"agggagaggg", "gagggagagg", "gagagggaga", "gggagaggga", "ggagagggag", "agagggagag")))
+
+
+# plot
+comb_p %>% mutate(new_bin = cut(start/1e3, breaks=c(seq(0, 200, 10)))) %>% add_row(new_bin = factor(c("(50,60]", "(60,70]", "(190,200]")), start = c(51001, 61001, 190001)) %>% group_by(pattern, new_bin) %>% summarise(n = n()) %>%
+  ggplot(aes(x = new_bin, y = pattern)) +
+  geom_point(aes(size = n, color = n)) +
+  #scale_color_distiller(palette ="RdPu", direction = 1, na.value = "white", n = 3) +
+  scale_colour_gradient(low = "#FDAE6B", high = "#7F2704") +
+  labs(x = "",
+       y = "") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust=1))
+
+# ggsave("FigS11D_LD20241216_location.pdf", path = "./output/", width = 7)
+
+```
+
+
+# Extended Data 7E - repeats
+I use RepeatMasker to compute repeat counts in different regions:
+  - LAD1:
+    - R4-5: chr9:112440815-112637307                --> output5   -->   https://www.repeatmasker.org/tmp/e67986537844f20f82ddb1a6c6d108e6.html
+    - R2-3: chr9:112154177-112360112                --> output4   -->   https://www.repeatmasker.org/tmp/e0c974dd9194c792fbcf6ec52d7b8ff6.html
+    - Rest of the LAD: chr9:111560001-112440815     --> output3   -->   https://www.repeatmasker.org/tmp/cc06ad0f47e6b84ce272d4eb2149c400.html
+                       chr9:112637307-113640000     --> output6   -->   https://www.repeatmasker.org/tmp/d2dea2695471a35c82c7526f4f0e22ea.html
+    
+  - LAD2: 
+    - boosting region:  chr9:109627353-109769723    --> output2   -->    https://www.repeatmasker.org/tmp/8d01b9d7d70688f2078d0d2b155df90c.html
+    - Rest of the LAD: chr9:109420001-109627353     --> output1   -->    https://www.repeatmasker.org/tmp/03994bae47e6949035154b1f6547e857.html
+
+## Load and process data
+```{r}
+# regions of interest
+regions = tibble(seqnames = rep("chr9", 6), 
+                 start = c(112440815, 112154177, 111560001, 112637307, 109627353, 109420001), 
+                 end = c(112637307, 112360112, 112440815, 113640000, 109769723, 109627353),
+                 output = c("R4-5", "R2-3", "LAD1_up", "LAD1_down", "LAD2_boosting", "LAD2")) %>% rowwise() %>% mutate(width = end-start)
+
+
+# repeat data
+metadata <- dplyr::tibble(file = dir("/DATA/usr/l.dauban/projects/FIMO/LD20231121_LAD_ROI_repeats/RM2_all_outputs/", recursive = T, full.names = T))
+
+tib <- dplyr::bind_rows(lapply(
+  1:nrow(metadata),
+  function(i) {
+    tmp <- read.table(metadata$file[i], header = TRUE)
+  }
+))
+
+# Add extra column for the general class of repeat
+tib <- tib %>% 
+  dplyr::mutate(
+    class = case_when(
+      grepl("SINE", class.family) ~ "SINE",
+      grepl("DNA", class.family) ~ "DNA",
+      grepl("LINE", class.family) ~ "LINE",
+      grepl("LTR", class.family) ~ "LTR",
+      grepl("Satellite", class.family) ~ "Satellite",
+      T ~ class.family),
+    output = case_when(
+      grepl("3545_0", sequence) ~ "LAD2",
+      grepl("3545_1", sequence) ~ "LAD2_boosting",
+      grepl("3545_2", sequence) ~ "LAD1_up",
+      grepl("3545_3", sequence) ~ "R2-3",
+      grepl("3545_4", sequence) ~ "R4-5",
+      grepl("3545_5", sequence) ~ "LAD1_down")
+  ) 
+
+
+# count and normalize by Mb
+tib_count <- tib %>% group_by(output) %>% dplyr::count(class) 
+
+tib_count <- left_join(tib_count, regions, by = "output") %>% select(output, class, n, width) %>% rowwise() %>% mutate(n.norm = 1e6*n/width) %>% mutate(output = factor(output, levels = c("R4-5", "R2-3", "LAD1_up", "LAD1_down", "LAD2_boosting", "LAD2")))
+
+```
+
+## Plot
+```{r}
+# combine counts for LAD1_up and LAD1_down and normalize 
+tib_count_LAD1 <- tib_count %>% filter(output == "LAD1_down" | output == "LAD1_up") %>% group_by(class) %>% summarize(n = sum(n)) %>% mutate(output = "LAD1", width = regions[which(regions$output == "LAD1_up"),]$width + regions[which(regions$output == "LAD1_down"),]$width) %>% mutate(n.norm = 1e6*n/width)
+
+# combine with the rest of the data
+tib_count_comb <- tib_count  %>% filter(output == "R4-5" | output == "R2-3" | output == "LAD2_boosting" | output == "LAD2") %>% rbind(tib_count_LAD1) %>% as.data.frame() %>% mutate(output = as.character(output)) %>% mutate(output = factor(output, levels = c("R4-5", "R2-3", "LAD1", "LAD2_boosting", "LAD2")))
+
+# plot
+tib_count_comb %>% filter(output == "R4-5" | output == "LAD1"| output == "LAD2_boosting" | output == "LAD2") %>% 
+  ggplot(aes(x = output, y = n.norm, fill = class)) +
+  geom_col() +
+  labs(x = "",
+       y = "count/Mb") +
+  scale_fill_carto_d(palette = "Prism") +
+  theme_bw() +
+  theme(axis.text.x=element_text(angle = 45, hjust = 1))
+  
+# ggsave("FigS11E_LD20231128_repeats.pdf", path = "./output/", height = 4, width = 5)  
+
+```
+
+
+# Extended Data 7F - repeats sub-fammilies
+## combine LAD1
+```{r}
+# same analysis but with the subclasses for each repeat
+tib_count_fam <- tib %>% group_by(output) %>% dplyr::count(class.family) 
+
+tib_count_fam <- tib_count_fam %>% 
+  dplyr::mutate(
+    class = case_when(
+      grepl("SINE", class.family) ~ "SINE",
+      grepl("DNA", class.family) ~ "DNA",
+      grepl("LINE", class.family) ~ "LINE",
+      grepl("LTR", class.family) ~ "LTR",
+      grepl("Satellite", class.family) ~ "Satellite",
+      T ~ class.family))
+
+tib_count_fam <- left_join(tib_count_fam, regions, by = "output") %>% select(output, class.family, n, width, class) %>% rowwise() %>% mutate(n.norm = 1e6*n/width) %>% mutate(output = factor(output, levels = c("R4-5", "R2-3", "LAD1_up", "LAD1_down", "LAD2_boosting", "LAD2")))
+
+
+# plot
+colors = c(
+  # DNA
+  rcartocolor::carto_pal(7, "Prism"), 
+  # LINE
+  rcartocolor::carto_pal(5, "Prism"), 
+  # LowCompl
+  rcartocolor::carto_pal(3, "Prism")[1], 
+  # KTR
+  rcartocolor::carto_pal(6, "Prism"), 
+  # RC
+  rcartocolor::carto_pal(3, "Prism")[1], 
+  # RETROP
+  rcartocolor::carto_pal(3, "Prism")[1], 
+  # rrNA
+  rcartocolor::carto_pal(3, "Prism")[1], 
+  # SAT
+  rcartocolor::carto_pal(3, "Prism")[1:2],
+  # SCRNA
+  rcartocolor::carto_pal(3, "Prism")[1], 
+  # SIMPL
+  rcartocolor::carto_pal(3, "Prism")[1], 
+  # SINE
+  rcartocolor::carto_pal(7, "Prism"), 
+  # SNRA
+ rcartocolor::carto_pal(3, "Prism")[1]
+)
+
+# combine counts for LAD1_up and LAD1_down and normalize 
+tib_count_fam_LAD1 <- tib_count_fam %>% filter(output == "LAD1_down" | output == "LAD1_up") %>% group_by(class.family) %>% summarize(n = sum(n)) %>% mutate(output = "LAD1", width = regions[which(regions$output == "LAD1_up"),]$width + regions[which(regions$output == "LAD1_down"),]$width) %>% mutate(n.norm = 1e6*n/width)
+
+tib_count_fam_LAD1 <- tib_count_fam_LAD1 %>% 
+  dplyr::mutate(
+    class = case_when(
+      grepl("SINE", class.family) ~ "SINE",
+      grepl("DNA", class.family) ~ "DNA",
+      grepl("LINE", class.family) ~ "LINE",
+      grepl("LTR", class.family) ~ "LTR",
+      grepl("Satellite", class.family) ~ "Satellite",
+      T ~ class.family))
+
+# combine with the rest of the data
+tib_count_fam_comb <- tib_count_fam %>% filter(output == "R4-5" | output == "R2-3" | output == "LAD2_boosting" | output == "LAD2") %>% rbind(tib_count_fam_LAD1) %>% as.data.frame() %>% mutate(output = as.character(output)) %>% mutate(output = factor(output, levels = c("R4-5", "R2-3", "LAD1", "LAD2_boosting", "LAD2")))
+
+# plot
+
+colors = c(
+  # DNA
+  rcartocolor::carto_pal(7, "Prism"), 
+  # LINE
+  rcartocolor::carto_pal(5, "Prism"), 
+  # LowCompl
+  rcartocolor::carto_pal(3, "Prism")[1], 
+  # KTR
+  rcartocolor::carto_pal(6, "Prism"), 
+  # RC
+  rcartocolor::carto_pal(3, "Prism")[1], 
+  # RETROP
+  rcartocolor::carto_pal(3, "Prism")[1], 
+  # rrNA
+  rcartocolor::carto_pal(3, "Prism")[1], 
+  # SAT
+  rcartocolor::carto_pal(3, "Prism")[1:2],
+  # SCRNA
+  rcartocolor::carto_pal(3, "Prism")[1], 
+  # SIMPL
+  rcartocolor::carto_pal(3, "Prism")[1], 
+  # SINE
+  rcartocolor::carto_pal(7, "Prism"), 
+  # SNRA
+ rcartocolor::carto_pal(3, "Prism")[1]
+)
+
+tib_count_fam_comb %>% filter(output == "R4-5" | output == "LAD1"| output == "LAD2_boosting" | output == "LAD2") %>% group_by(class) %>% mutate(dummy_var = as.character(x = factor(x = class.family, labels = seq_len(length.out = dplyr::n_distinct(class.family))))) %>% ungroup() %>%
+  ggplot(aes(x = output, y = n.norm, fill = class.family)) +
+  geom_col() +
+  labs(x = "",
+       y = "count/Mb") +
+  facet_wrap(~ class, scales = "free_y") +
+  #scale_fill_carto_d(palette = "Prism") +
+  scale_fill_manual(values=colors)+
+  theme_bw() +
+  theme(axis.text.x=element_text(angle = 45, hjust = 1))
+  
+
+# ggsave("FigS11F_LD20231128_repeats_subfam.pdf", path = "./output/", height = 8, width = 15)  
+
+```
+
+
+# Extended Data 7G - AT content
+## Load data
+```{r}
+LAD2 <- DNAString(as.character(readDNAStringSet("/DATA/usr/l.dauban/projects/FIMO/LD20231121_LAD_ROI_repeats/output1")))
+LAD2.2 <- DNAString(as.character(readDNAStringSet("/DATA/usr/l.dauban/projects/FIMO/LD20231121_LAD_ROI_repeats/output2")))
+LAD1_up <- DNAString(as.character(readDNAStringSet("/DATA/usr/l.dauban/projects/FIMO/LD20231121_LAD_ROI_repeats/output3")))
+R23 <- DNAString(as.character(readDNAStringSet("/DATA/usr/l.dauban/projects/FIMO/LD20231121_LAD_ROI_repeats/output4")))
+R45 <- DNAString(as.character(readDNAStringSet("/DATA/usr/l.dauban/projects/FIMO/LD20231121_LAD_ROI_repeats/output5")))
+LAD1_down <- DNAString(as.character(readDNAStringSet("/DATA/usr/l.dauban/projects/FIMO/LD20231121_LAD_ROI_repeats/output6")))
+
+```
+
+## Plot
+```{r}
+
+# Calculate AT content
+list_AT_no <- lapply(list(R45, R23, c(LAD1_up, LAD1_down), LAD2.2, LAD2), function(x) {100-calc_windowed_GC(x,250,0)})
+names(list_AT_no) <- c("R45", "R23", "LAD1", "LAD2.2", "LAD2")
+
+# convert the list to data frame
+df_AT_no <- as.data.frame(stri_list2matrix(list_AT_no))
+names(df_AT_no) <- c("R45", "R23", "LAD1", "LAD2.2", "LAD2")
+
+# convert to numeric
+df_AT_no <- mutate_all(df_AT_no, function(x) as.numeric(as.character(x)))
+
+
+# plot
+df_AT_no %>% gather(value = "AT", key = "output") %>% filter(output == "R45" | output == "LAD1" | output == "LAD2.2" | output == "LAD2") %>% mutate(output = factor(output, levels = c("R45", "LAD1", "LAD2.2", "LAD2"))) %>%
+  ggplot(aes(x=output, y=AT))+
+  geom_violin(aes(color = output), show.legend = "none") +
+  geom_beeswarm_rast(aes(color = output), alpha = 0.3, cex = 0.08, priority ="random", show.legend = "none") +
+  geom_signif(test = "wilcox.test", test.args = list(alternative = c("two.sided")), comparisons = list(c("R45", "LAD1"), c("LAD2.2", "LAD2")), y_position = c(85, 85)) +
+  stat_summary(fun=median, geom="crossbar", width=0.5, size = 0.3, color = "black", show.legend = "none")+
+  scale_color_manual(values = c("#1B899B", "#A6CEE2", "#1B899B", "#A6CEE2")) +
+  scale_y_continuous(expand = expansion(mult = c(0.08))) +
+  theme_bw()+
+  labs(x= '',
+       y= "percentage(A/T content)")+
+  theme(axis.text.x=element_text(angle = 45, hjust = 1))
+
+# ggsave("FigS11G_LD20231213_ATcontent.pdf", path = "./output/", height = 6, width = 7)
+
+```
+
+
+# Extended Data 7H - Secondary structures
+## LAD1
+### load data
+```{r}
+
+R45_length <- getLength(read.fasta("/DATA/usr/l.dauban/projects/FIMO/LD20240617_2ndary_structues/667039de00123_zip_R45/667039de00123.fasta"))
+LAD1_length <- getLength(read.fasta("/DATA/usr/l.dauban/projects/FIMO/LD20240617_2ndary_structues/66703d0b85953_zip_LAD1/66703d0b85953.fasta"))
+
+
+####### A-Phased Repeats #######
+R45_APR <- read.table("/DATA/usr/l.dauban/projects/FIMO/LD20240617_2ndary_structues/667039de00123_zip_R45/667039de00123_APR.tsv", header = TRUE)
+R45_APR <- R45_APR %>% mutate(sample = "R45")
+
+LAD1_APR <- read.table("/DATA/usr/l.dauban/projects/FIMO/LD20240617_2ndary_structues/66703d0b85953_zip_LAD1/66703d0b85953_APR.tsv", header = TRUE)
+LAD1_APR <- LAD1_APR %>% mutate(sample = "LAD1")
+
+comb_APR <- rbind(R45_APR, LAD1_APR)
+
+
+####### G4 #######
+R45_G4 <- read.table("/DATA/usr/l.dauban/projects/FIMO/LD20240617_2ndary_structues/667039de00123_zip_R45/667039de00123_GQ.tsv", header = TRUE)
+R45_G4 <- R45_G4 %>% mutate(sample = "R45")
+
+LAD1_G4 <- read.table("/DATA/usr/l.dauban/projects/FIMO/LD20240617_2ndary_structues/66703d0b85953_zip_LAD1/66703d0b85953_GQ.tsv", header = TRUE)
+LAD1_G4 <- LAD1_G4 %>% mutate(sample = "LAD1")
+
+comb_G4 <- rbind(R45_G4, LAD1_G4)
+
+
+####### Z-DNA motifs #######
+R45_ZM <- read.table("/DATA/usr/l.dauban/projects/FIMO/LD20240617_2ndary_structues/667039de00123_zip_R45/667039de00123_Z.tsv", header = TRUE)
+R45_ZM <- R45_ZM %>% mutate(sample = "R45")
+
+LAD1_ZM <- read.table("/DATA/usr/l.dauban/projects/FIMO/LD20240617_2ndary_structues/66703d0b85953_zip_LAD1/66703d0b85953_Z.tsv", header = TRUE)
+LAD1_ZM <- LAD1_ZM %>% mutate(sample = "LAD1")
+
+comb_ZM <- rbind(R45_ZM, LAD1_ZM)
+
+
+####### Direct repeats #######
+R45_DR <- read.table("/DATA/usr/l.dauban/projects/FIMO/LD20240617_2ndary_structues/667039de00123_zip_R45/667039de00123_DR.tsv", header = TRUE)
+R45_DR <- R45_DR %>% mutate(sample = "R45")
+
+LAD1_DR <- read.table("/DATA/usr/l.dauban/projects/FIMO/LD20240617_2ndary_structues/66703d0b85953_zip_LAD1/66703d0b85953_DR.tsv", header = TRUE)
+LAD1_DR <- LAD1_DR %>% mutate(sample = "LAD1")
+
+comb_DR <- rbind(R45_DR, LAD1_DR)
+
+
+####### Inverted repeats #######
+R45_IR <- read.table("/DATA/usr/l.dauban/projects/FIMO/LD20240617_2ndary_structues/667039de00123_zip_R45/667039de00123_IR.tsv", header = TRUE)
+R45_IR <- R45_IR %>% mutate(sample = "R45")
+
+LAD1_IR <- read.table("/DATA/usr/l.dauban/projects/FIMO/LD20240617_2ndary_structues/66703d0b85953_zip_LAD1/66703d0b85953_IR.tsv", header = TRUE)
+LAD1_IR <- LAD1_IR %>% mutate(sample = "LAD1")
+
+comb_IR <- rbind(R45_IR, LAD1_IR)
+
+
+####### Miror repeats #######
+R45_MR <- read.table("/DATA/usr/l.dauban/projects/FIMO/LD20240617_2ndary_structues/667039de00123_zip_R45/667039de00123_MR.tsv", header = TRUE)
+R45_MR <- R45_MR %>% mutate(sample = "R45")
+
+LAD1_MR <- read.table("/DATA/usr/l.dauban/projects/FIMO/LD20240617_2ndary_structues/66703d0b85953_zip_LAD1/66703d0b85953_MR.tsv", header = TRUE)
+LAD1_MR <- LAD1_MR %>% mutate(sample = "LAD1")
+
+comb_MR <- rbind(R45_MR, LAD1_MR)
+
+
+####### Short Tandem repeats #######
+R45_STR <- read.table("/DATA/usr/l.dauban/projects/FIMO/LD20240617_2ndary_structues/667039de00123_zip_R45/667039de00123_STR.tsv", header = TRUE)
+R45_STR <- R45_STR %>% mutate(sample = "R45")
+
+LAD1_STR <- read.table("/DATA/usr/l.dauban/projects/FIMO/LD20240617_2ndary_structues/66703d0b85953_zip_LAD1/66703d0b85953_STR.tsv", header = TRUE)
+LAD1_STR <- LAD1_STR %>% mutate(sample = "LAD1")
+
+comb_STR <- rbind(R45_STR, LAD1_STR)
+
+
+# combine
+all_R45 <- comb_APR %>% select(Start, Stop, Type, sample, Subset) %>% rbind(., comb_DR %>% select(Start, Stop, Type, sample, Subset),
+                                                   comb_G4 %>% select(Start, Stop, Type, sample, Subset),
+                                                   comb_IR %>% select(Start, Stop, Type, sample, Subset),
+                                                   comb_MR %>% select(Start, Stop, Type, sample, Subset),
+                                                   comb_STR %>% select(Start, Stop, Type, sample, Subset),
+                                                   comb_ZM %>% select(Start, Stop, Type, sample, Subset)) %>% mutate(chr = "chr9", Start = Start + 112440814, 
+                                                                    Stop = Stop + 112440814) %>% subset(sample == "R45")
+
+all_LAD1 <- comb_APR %>% select(Start, Stop, Type, sample, Subset) %>% rbind(., comb_DR %>% select(Start, Stop, Type, sample, Subset),
+                                                   comb_G4 %>% select(Start, Stop, Type, sample, Subset),
+                                                   comb_IR %>% select(Start, Stop, Type, sample, Subset),
+                                                   comb_MR %>% select(Start, Stop, Type, sample, Subset),
+                                                   comb_STR %>% select(Start, Stop, Type, sample, Subset),
+                                                   comb_ZM %>% select(Start, Stop, Type, sample, Subset)) %>% mutate(chr = "chr9", Start = ifelse(Start < 880814, Start + 111560000, Start + 111560000 + 196492),
+                                                                     Stop = ifelse(Stop < 880814, Stop + 111560000, Stop + 111560000 + 196492)) %>% subset(sample == "LAD1")  
+
+
+# combine
+all_motifs <- rbind(all_R45, all_LAD1)
+```
+
+### plot
+```{r}
+all_motifs %>% group_by(sample, Type) %>% dplyr::summarise(n = dplyr::n()) %>% mutate(norm = ifelse(sample == "LAD1", n, n*LAD1_length/R45_length)) %>% pivot_wider(names_from = sample, values_from = c(n, norm)) %>% mutate(FC = norm_R45 / n_LAD1) %>% mutate(log2 = log2(FC)) %>% ggplot(aes(x=reorder(Type,log2), y=log2)) + 
+    geom_col() + 
+    geom_hline(yintercept = c(1, -1), linetype = "dashed", alpha = 0.5) +
+    labs(title = "",
+         x = "",
+         y = "log2(FC)") +
+    coord_cartesian(ylim = c(-1.5, 1.5)) +
+    theme_bw() +
+    theme(axis.text.x = element_text(angle = 45, vjust=1, hjust=1, size = 12))
+
+
+# ggsave("FigS11H_LD20241120_second_structure_LAD1.pdf", path = "./output/")
+
+```
+
+## LAD2
+### load data
+```{r}
+
+LAD2nr_length <- getLength(read.fasta("/DATA/usr/l.dauban/projects/FIMO/LD20240617_2ndary_structues/67506d346b942_zip_LAD2nr/67506d346b942.fasta"))
+LAD2_length <- getLength(read.fasta("/DATA/usr/l.dauban/projects/FIMO/LD20240617_2ndary_structues/67506da68c19d_zip_LAD2/67506da68c19d.fasta"))
+
+###### A-Phased Repeat ######
+LAD2nr_APR <- read.table("/DATA/usr/l.dauban/projects/FIMO/LD20240617_2ndary_structues/67506d346b942_zip_LAD2nr/67506d346b942_APR.tsv", header = TRUE)
+LAD2nr_APR <- LAD2nr_APR %>% mutate(sample = "LAD2nr")
+
+LAD2_APR <- read.table("/DATA/usr/l.dauban/projects/FIMO/LD20240617_2ndary_structues/67506da68c19d_zip_LAD2/67506da68c19d_APR.tsv", header = TRUE)
+LAD2_APR <- LAD2_APR %>% mutate(sample = "LAD2")
+
+LAD2_comb_APR <- rbind(LAD2nr_APR, LAD2_APR)
+
+
+###### G4 ######
+LAD2nr_G4 <- read.table("/DATA/usr/l.dauban/projects/FIMO/LD20240617_2ndary_structues/67506d346b942_zip_LAD2nr/67506d346b942_GQ.tsv", header = TRUE)
+LAD2nr_G4 <- LAD2nr_G4 %>% mutate(sample = "LAD2nr")
+
+LAD2_G4 <- read.table("/DATA/usr/l.dauban/projects/FIMO/LD20240617_2ndary_structues/67506da68c19d_zip_LAD2/67506da68c19d_GQ.tsv", header = TRUE)
+LAD2_G4 <- LAD2_G4 %>% mutate(sample = "LAD2")
+
+LAD2_comb_G4 <- rbind(LAD2nr_G4, LAD2_G4)
+
+
+###### Z DNA motifs ######
+LAD2nr_ZM <- read.table("/DATA/usr/l.dauban/projects/FIMO/LD20240617_2ndary_structues/67506d346b942_zip_LAD2nr/67506d346b942_Z.tsv", header = TRUE)
+LAD2nr_ZM <- LAD2nr_ZM %>% mutate(sample = "LAD2nr")
+
+LAD2_ZM <- read.table("/DATA/usr/l.dauban/projects/FIMO/LD20240617_2ndary_structues/67506da68c19d_zip_LAD2/67506da68c19d_Z.tsv", header = TRUE)
+LAD2_ZM <- LAD2_ZM %>% mutate(sample = "LAD2")
+
+LAD2_comb_ZM <- rbind(LAD2nr_ZM, LAD2_ZM)
+
+
+###### Direct Repeat ######
+LAD2nr_DR <- read.table("/DATA/usr/l.dauban/projects/FIMO/LD20240617_2ndary_structues/67506d346b942_zip_LAD2nr/67506d346b942_DR.tsv", header = TRUE)
+LAD2nr_DR <- LAD2nr_DR %>% mutate(sample = "LAD2nr")
+
+LAD2_DR <- read.table("/DATA/usr/l.dauban/projects/FIMO/LD20240617_2ndary_structues/67506da68c19d_zip_LAD2/67506da68c19d_DR.tsv", header = TRUE)
+LAD2_DR <- LAD2_DR %>% mutate(sample = "LAD2")
+
+LAD2_comb_DR <- rbind(LAD2nr_DR, LAD2_DR)
+
+
+###### Inverted Repeat ######
+LAD2nr_IR <- read.table("/DATA/usr/l.dauban/projects/FIMO/LD20240617_2ndary_structues/67506d346b942_zip_LAD2nr/67506d346b942_IR.tsv", header = TRUE)
+LAD2nr_IR <- LAD2nr_IR %>% mutate(sample = "LAD2nr")
+
+LAD2_IR <- read.table("/DATA/usr/l.dauban/projects/FIMO/LD20240617_2ndary_structues/67506da68c19d_zip_LAD2/67506da68c19d_IR.tsv", header = TRUE)
+LAD2_IR <- LAD2_IR %>% mutate(sample = "LAD2")
+
+LAD2_comb_IR <- rbind(LAD2nr_IR, LAD2_IR)
+
+
+###### Mirror Repeat ######
+LAD2nr_MR <- read.table("/DATA/usr/l.dauban/projects/FIMO/LD20240617_2ndary_structues/67506d346b942_zip_LAD2nr/67506d346b942_MR.tsv", header = TRUE)
+LAD2nr_MR <- LAD2nr_MR %>% mutate(sample = "LAD2nr")
+
+LAD2_MR <- read.table("/DATA/usr/l.dauban/projects/FIMO/LD20240617_2ndary_structues/67506da68c19d_zip_LAD2/67506da68c19d_MR.tsv", header = TRUE)
+LAD2_MR <- LAD2_MR %>% mutate(sample = "LAD2")
+
+LAD2_comb_MR <- rbind(LAD2nr_MR, LAD2_MR)
+
+
+###### Short Tandem Repeat ######
+LAD2nr_STR <- read.table("/DATA/usr/l.dauban/projects/FIMO/LD20240617_2ndary_structues/67506d346b942_zip_LAD2nr/67506d346b942_STR.tsv", header = TRUE)
+LAD2nr_STR <- LAD2nr_STR %>% mutate(sample = "LAD2nr")
+
+LAD2_STR <- read.table("/DATA/usr/l.dauban/projects/FIMO/LD20240617_2ndary_structues/67506da68c19d_zip_LAD2/67506da68c19d_STR.tsv", header = TRUE)
+LAD2_STR <- LAD2_STR %>% mutate(sample = "LAD2")
+
+LAD2_comb_STR <- rbind(LAD2nr_STR, LAD2_STR)
+
+
+# combine
+all_LAD2nr <- LAD2_comb_APR %>% select(Start, Stop, Type, sample, Subset) %>% rbind(., LAD2_comb_DR %>% select(Start, Stop, Type, sample, Subset),
+                                                   LAD2_comb_G4 %>% select(Start, Stop, Type, sample, Subset),
+                                                   LAD2_comb_IR %>% select(Start, Stop, Type, sample, Subset),
+                                                   LAD2_comb_MR %>% select(Start, Stop, Type, sample, Subset),
+                                                   LAD2_comb_STR %>% select(Start, Stop, Type, sample, Subset),
+                                                   LAD2_comb_ZM %>% select(Start, Stop, Type, sample, Subset)) %>% mutate(chr = "chr9", Start = Start + 109627353, 
+                                                                    Stop = Stop + 109627353) %>% subset(sample == "LAD2nr")
+
+
+all_LAD2 <- LAD2_comb_APR %>% select(Start, Stop, Type, sample, Subset) %>% rbind(., LAD2_comb_DR %>% select(Start, Stop, Type, sample, Subset),
+                                                   LAD2_comb_G4 %>% select(Start, Stop, Type, sample, Subset),
+                                                   LAD2_comb_IR %>% select(Start, Stop, Type, sample, Subset),
+                                                   LAD2_comb_MR %>% select(Start, Stop, Type, sample, Subset),
+                                                   LAD2_comb_STR %>% select(Start, Stop, Type, sample, Subset),
+                                                   LAD2_comb_ZM %>% select(Start, Stop, Type, sample, Subset)) %>% mutate(chr = "chr9", Start = Start + 109420001,
+                                                                     Stop = Stop + 109420001) %>% subset(sample == "LAD2")  
+
+
+# combine
+all_motifs <- rbind(all_LAD2nr, all_LAD2)
+
+```
+
+### plot
+```{r}
+
+all_motifs %>% group_by(sample, Type) %>% summarise(n = dplyr::n()) %>% mutate(norm = ifelse(sample == "LAD2", n, n*LAD2_length/LAD2nr_length)) %>% pivot_wider(names_from = sample, values_from = c(n, norm)) %>% mutate(FC = norm_LAD2nr / n_LAD2) %>% mutate(log2 = log2(FC)) %>% ggplot(aes(x=reorder(Type,log2), y=log2)) + 
+    geom_col() + 
+    geom_hline(yintercept = c(1, -1), linetype = "dashed", alpha = 0.5) +
+    labs(title = "",
+         x = "",
+         y = "log2(FC)") +
+    coord_cartesian(ylim = c(-1.5, 1.5)) +
+    theme_bw() +
+    theme(axis.text.x = element_text(angle = 45, vjust=1, hjust=1, size = 12))
+
+
+# ggsave("FigS11H_LD20241120_second_structure_LAD2.pdf", path = "./output/")
+
+```
+
+
+# Extended Data 7I - H3K9me2 and H3K9me3
+Remainder of the coordinates used in the paper:
+LAD1:
+    - R4-5: chr9:112440815-112637307
+    - R2-3: chr9:112154177-112360112
+    - Rest of the LAD: chr9:111560001-112440815
+                       chr9:112637307-113640000
+
+  - LAD2:
+    - boosting region:  chr9:109627353-109769723
+    - Rest of the LAD: chr9:109420001-109627353
+
+111560001-113640000
+
+## H3K9me3
+```{r}
+
+H3K9me3.bw2 <- import("/DATA/usr/l.dauban/projects/DATA/mESCs_2i/E14_2i_H3K9me3_GSM850407_SRR392308_MQ15_sample.bw")
+
+R45 <- GRanges(seqnames = "chr9",
+               ranges = IRanges(start = 112440815, end = 112637306))
+
+LAD1 <- GRanges(seqnames = "chr9",
+                ranges = IRanges(start = c(111560001, 112637307), end = c(112440814, 113640000)))
+
+LAD2.1 <- GRanges(seqnames = "chr9",
+                  ranges = IRanges(start = 109420001, end = 109627352))
+
+LAD2.2 <- GRanges(seqnames = "chr9",
+                  ranges = IRanges(start = 109627353, end = 109769723))
+
+H3K9me3.bw2$region <- "other"
+
+ovl.1 <- findOverlaps(H3K9me3.bw2, R45)
+H3K9me3.bw2[queryHits(ovl.1),]$region <- "R45"
+
+ovl.2 <- findOverlaps(H3K9me3.bw2, LAD1)
+H3K9me3.bw2[queryHits(ovl.2),]$region <- "LAD1"
+
+ovl.3 <- findOverlaps(H3K9me3.bw2, LAD2.1)
+H3K9me3.bw2[queryHits(ovl.3),]$region <- "LAD2.1"
+
+ovl.4 <- findOverlaps(H3K9me3.bw2, LAD2.2)
+H3K9me3.bw2[queryHits(ovl.4),]$region <- "LAD2.2"
+
+
+H3K9me3.bw2 %>% data.frame() %>% filter(seqnames == "chr9" & region != "other") %>% mutate(region = factor(region, levels = c("other", "R45", "LAD1", "LAD2.2", "LAD2.1"))) %>%
+  ggplot(aes(x=region, y=score, color=region)) +
+ geom_violin(trim = F, show.legend = F) +
+  geom_beeswarm_rast(cex = 0.002, alpha = 0.5, show.legend = F) +
+  geom_signif(test = "wilcox.test", test.args = list(alternative = c("two.sided")), comparisons = list(c("R45", "LAD1"), c("LAD2.2", "LAD2.1")), color = "black", y_position = c(21, 21), show.legend = FALSE) +
+  stat_summary(fun=median, geom="crossbar", width=0.35, size = 0.3, color = "black", show.legend = FALSE)+
+  scale_color_manual(values = c("#1B899B", "#A6CEE2", "#1B899B", "#A6CEE2")) +
+  labs(x = "",
+       y = "H3K9me3 pA-DamID (log2 score)") +
+  theme_bw() +
+  theme(axis.text.x=element_text(angle = 45, hjust = 1))
+
+# ggsave("FigS11I_LD20250404_H3K9me3.pdf", path = "./output/", height = 5, width = 5)
+
+```
+
+## H3K9me2
+```{r}
+H3K9me2.bw <- import("/DATA/usr/l.dauban/projects/DATA/H3K9me2/H3K9me2_chr9_mm10.bw")
+
+H3K9me2.bw2 <- H3K9me2.bw
+H3K9me2.bw2$region <- "other"
+
+ovl.1 <- findOverlaps(H3K9me2.bw2, R45)
+H3K9me2.bw2[queryHits(ovl.1),]$region <- "R45"
+
+ovl.2 <- findOverlaps(H3K9me2.bw2, LAD1)
+H3K9me2.bw2[queryHits(ovl.2),]$region <- "LAD1"
+
+ovl.3 <- findOverlaps(H3K9me2.bw2, LAD2.1)
+H3K9me2.bw2[queryHits(ovl.3),]$region <- "LAD2.1"
+
+ovl.4 <- findOverlaps(H3K9me2.bw2, LAD2.2)
+H3K9me2.bw2[queryHits(ovl.4),]$region <- "LAD2.2"
+
+
+H3K9me2.bw2 %>% data.frame() %>% filter(seqnames == "chr9" & region != "other" & score != 0) %>% mutate(region = factor(region, levels = c("other", "R45", "LAD1", "LAD2.2", "LAD2.1"))) %>%
+  ggplot(aes(x=region, y=score, color=region)) +
+  geom_violin(trim = F, show.legend = F) +
+  geom_beeswarm_rast(cex = 0.005, alpha = 0.5, show.legend = F) +
+  ggpubr::geom_signif(test = "wilcox.test", test.args = list(alternative = c("two.sided")), comparisons = list(c("R45", "LAD1"), c("LAD2.2", "LAD2.1")), color = "black", y_position = c(4.4, 4.4), show.legend = F) +
+  stat_summary(fun=median, geom="crossbar", width=0.35, size = 0.3, color = "black", show.legend = F)+
+  scale_color_manual(values = c("#1B899B", "#A6CEE2", "#1B899B", "#A6CEE2")) +
+  labs(x = "",
+       y = "H3K9me2 ChIP-seq (log2 score)") +
+  theme_bw() +
+  theme(axis.text.x=element_text(angle = 45, hjust = 1))
+
+#ggsave("FigS11I_LD20241125_H3K9me2.pdf", path = "./output/", height = 5, width = 5)
+
+```
+
